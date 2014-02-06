@@ -17,12 +17,14 @@
 #include <zlib.h>
 #include <list>
 #include <set>
+#include <boost/algorithm/string.hpp>
+#include <cmath>
 
-#define BUFFER_SIZE 1000000 // 65536 chars is not big enough for more than ~5000 samples
+#define BUFFER_SIZE 1000000 // 65536 chars is not big enough for more than ~50,000 samples
+#define EPSILON 0.001 // 65536 chars is not big enough for more than ~50,000 samples
 
 
 using namespace std;
-typedef double real;
 
 struct Site {
     vector<float> hap;
@@ -42,18 +44,19 @@ vector<bool> Site::is_male;
 
 void Site::write(FILE *F)
 {
-    fprintf(F, "%s\t%u\t.\t%c\t%c\t100\tPASS\t.\tGT:AP", chr.c_str(), pos, all[0],
+    fprintf(F, "%s\t%u\t.\t%c\t%c\t100\tPASS\t.\tGT:GP:APP", chr.c_str(), pos,
+            all[0],
             all[1]);
     uint in = hap.size() / 2;
-    real k = 1.0 / cov;
+    double k = 1.0 / cov;
     bool is_par = (pos >= 60001 && pos <= 2699520) || (pos >= 154931044
                   && pos <= 155270560);
 
     for (uint i = 0; i < in; i++) {
         uint a, b;
-        real p0 = hap[i * 2] * k, p1 = hap[i * 2 + 1] * k;
-        real prr = (1 - p0) * (1 - p1), pra = (1 - p0) * p1 + p0 * (1 - p1),
-             paa = p0 * p1;
+        double p0 = hap[i * 2] * k, p1 = hap[i * 2 + 1] * k;
+        double prr = (1 - p0) * (1 - p1), pra = (1 - p0) * p1 + p0 * (1 - p1),
+               paa = p0 * p1;
 
         if (is_x && is_male[i] && !is_par) {
             if (prr >= paa) a = b = 0;
@@ -71,7 +74,18 @@ void Site::write(FILE *F)
             } else a = b = 1;
         }
 
-        fprintf(F, "\t%u|%u:%.3f,%.3f", a, b, p0, p1);
+        vector<double> GPs;
+        GPs[0] = (1 - p0) * (1 - p1);
+        GPs[1] = (1 - p0) * p1 + p0 * (1 - p1);
+        GPs[2] = p0 * p1;
+
+        for (auto & GP : GPs) GP = -10 * log10(GP);
+
+        p0 = -10 * log10(p0);
+        p1 = -10 * log10(p1);
+
+        fprintf(F, "\t%u|%u:%.3f,%.3f,%.3f:%.3f,%.3f", a, b, GPs[0], GPs[1], GPs[2], p0,
+                p1);
     }
 
     fprintf(F, "\n");
@@ -157,16 +171,111 @@ bool hapfuse::load_chunk(const char *F)
 
     while (!gzeof(f)) {
         gzgets(f, buff, BUFFER_SIZE);
-        istringstream si(buff);
-        si >> s.chr >> s.pos >> a >> a >> b;
-        s.all[0] = a[0];
-        s.all[1] = b[0];
-        si >> a >> a >> a >> a;
+        vector<string> tokens;
+        boost::split(tokens, buff, boost::is_any_of("\t"));
+        s.chr = tokens[0];
+        s.pos = stoi(tokens[1]);
+        assert(tokens[3].size() == 1);
+        assert(tokens[4].size() == 1);
+        s.all[0] = tokens[3][0];
+        s.all[1] = tokens[4][0];
 
-        for (uint i = 0; i < in; i++) {
-            si >> a;
-            a[9] = ' ';
-            sscanf(a.c_str() + 4, "%f%f", &s.hap[i * 2], &s.hap[i * 2 + 1]);
+        vector<string> GTFields;
+        boost::split(GTFields, tokens[8], boost::is_any_of(":"));
+        int GTIdx = -1;
+        int GPIdx = -1;
+        int APPIdx = -1;
+
+        for (unsigned fieldIdx = 0; fieldIdx < GTFields.size(); ++fieldIdx) {
+            if (GTFields[fieldIdx].compare("GT") == 0) GTIdx = fieldIdx;
+            else if (GTFields[fieldIdx].compare("GP") == 0) GPIdx = fieldIdx;
+            else if (GTFields[fieldIdx].compare("APP") == 0) APPIdx = fieldIdx;
+        }
+
+        if (!(GTIdx >= 0 && (GPIdx >= 0 || APPIdx >= 0))) {
+            cerr << "expected GT:GP or GT:APP input format in chunk " << F << endl;
+            exit(1);
+        }
+
+
+        // read sample specific data
+        for (uint i = 9; i < tokens.size(); ++i) {
+            vector<string> sampDat;
+            boost::split(sampDat, tokens[i], boost::is_any_of(":"));
+
+            // parse haps
+            vector<string> alleles;
+            boost::split(alleles, sampDat[GTIdx], boost::is_any_of("|"));
+
+            if (alleles.size() != 2) {
+                cerr << "Error in GT data, could not split on '|': " << sampDat[GTIdx] << endl;
+                exit(1);
+            }
+
+            // extract/estimate allelic probabilities
+            float pHap1, pHap2;
+            if (APPIdx >= 0) {
+                vector<string> inDat;
+                boost::split(inDat, sampDat[APPIdx], boost::is_any_of(","));
+                assert(inDat.size() == 2);
+
+                vector<float> APPs;
+                for(auto app : inDat) APPs.push_back(stof(app));
+
+                // convert GPs to probabilities
+                float sum = 0;
+
+                for (auto& APP : APPs) {
+                    APP = pow(10.0, -APP / 10);
+                    sum += APP;
+                }
+
+                assert(sum < 2 + EPSILON);
+                pHap1 = APPs[0];
+                pHap2 = APPs[1];
+            }
+
+            // parse GPs
+            else if (GPIdx >= 0) {
+
+                vector<string> inDat;
+                boost::split(inDat, sampDat[GPIdx], boost::is_any_of(","));
+                assert(inDat.size() == 3);
+
+                vector<float> GPs;
+                for(auto gp : inDat) GPs.push_back(stof(gp));
+
+                // convert GPs to probabilities
+                float sum = 0;
+
+                for (auto& GP : GPs) {
+                    GP = pow(10.0, -GP / 10);
+                    sum += GP;
+                }
+
+                assert(fabs(sum - 1) < EPSILON);
+                pHap1 = GPs[2];
+                pHap2 = GPs[2];
+
+                // swap alleles
+                if (alleles[0] != alleles[1]) {
+                    if (alleles[0] == "1")
+                        pHap1 += GPs[1];
+                    else
+                        pHap2 += GPs[1];
+                } else {
+                    pHap1 += GPs[1] / 2;
+                    pHap2 += GPs[1] / 2;
+                }
+            }
+            else{
+                cerr << "could not load GP or APP field: " << tokens[i] << endl;
+                exit(1);
+            }
+
+            // assign allelic probs
+            s.hap[i * 2] = pHap1;
+            s.hap[i * 2 + 1] = pHap2;
         }
 
         chunk.push_back(s);
@@ -179,13 +288,15 @@ bool hapfuse::load_chunk(const char *F)
 void hapfuse::vcf_head(const char *F)
 {
     vcf = fopen(F, "wt");
-    fprintf(vcf, "##fileformat=VCFv4.0\n");
+    fprintf(vcf, "##fileformat=VCFv4.1\n");
     fprintf(vcf, "##source=BCM:SNPTools:hapfuse\n");
-    fprintf(vcf, "##reference=1000Genomes-NCBI37\n");
     fprintf(vcf,
             "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">\n");
     fprintf(vcf,
-            "##FORMAT=<ID=AP,Number=2,Type=Float,Description=\"Allelic Probability, P(Allele=1|Haplotype)\">\n");
+            "##FORMAT=<ID=GP,Number=3,Type=Float,Description=\"Phred-scaled genotype posterior probabilities\">\n");
+
+    fprintf(vcf,
+            "##FORMAT=<ID=APP,Number=2,Type=Float,Description=\"Phred-scaled allelic probability, P(Allele=1|Haplotype)\">\n");
     fprintf(vcf, "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT");
 }
 
@@ -227,7 +338,7 @@ bool hapfuse::load_files(const vector<string> & inFiles)
 void hapfuse::work(const char *F)
 {
     vcf_head(F);
-    vector<real> sum;
+    vector<double> sum;
 
     for (uint i = 0; i < file.size(); i++) {
         if (!load_chunk(file[i].c_str())) return;
@@ -354,6 +465,9 @@ int main(int argc, char **argv)
     hf.work(outFile.c_str());
     return 0;
 }
+
+
+
 
 
 

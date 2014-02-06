@@ -19,15 +19,33 @@
 #include <set>
 #include <boost/algorithm/string.hpp>
 #include <cmath>
+#include <cfloat>
 
 #define BUFFER_SIZE 1000000 // 65536 chars is not big enough for more than ~50,000 samples
-#define EPSILON 0.001 // 65536 chars is not big enough for more than ~50,000 samples
+#define EPSILON 0.001 // precision of input floats
 
 
 using namespace std;
 
+// converts a probability to phred scale
+double prob2Phred(double prob){
+    assert(prob >= 0 - EPSILON);
+    if(prob < 0) prob = 0;
+    if(prob == 0) return DBL_MAX_10_EXP * 10;
+    else if(prob >= 1) return 2*DBL_MIN; // 0 comes out negative zero on my system, not cool!
+    else return -10 * log10(prob);
+}
+
+//converts a phred scaled probability back to a probability
+double phred2Prob(double phred){
+    assert(phred >= 0);
+    if(phred >= DBL_MAX_10_EXP*10) return DBL_MIN;
+    else return pow(10, -phred / 10);
+}
+
+
 struct Site {
-    vector<float> hap;
+    vector<double> hap;
     string chr;
     uint32_t pos;
     uint16_t cov;
@@ -74,15 +92,15 @@ void Site::write(FILE *F)
             } else a = b = 1;
         }
 
-        vector<double> GPs;
+        vector<double> GPs(3);
         GPs[0] = (1 - p0) * (1 - p1);
         GPs[1] = (1 - p0) * p1 + p0 * (1 - p1);
         GPs[2] = p0 * p1;
 
-        for (auto & GP : GPs) GP = -10 * log10(GP);
+        for (auto & GP : GPs) GP = prob2Phred(GP);
 
-        p0 = -10 * log10(p0);
-        p1 = -10 * log10(p1);
+        p0 = prob2Phred(p0);
+        p1 = prob2Phred(p1);
 
         fprintf(F, "\t%u|%u:%.3f,%.3f,%.3f:%.3f,%.3f", a, b, GPs[0], GPs[1], GPs[2], p0,
                 p1);
@@ -216,20 +234,20 @@ bool hapfuse::load_chunk(const char *F)
 
 
             // extract/estimate allelic probabilities
-            float pHap1, pHap2;
+            double pHap1, pHap2;
             if (APPIdx >= 0) {
                 vector<string> inDat;
                 boost::split(inDat, sampDat[APPIdx], boost::is_any_of(","));
                 assert(inDat.size() == 2);
 
-                vector<float> APPs;
+                vector<double> APPs;
                 for(auto app : inDat) APPs.push_back(stof(app));
 
                 // convert GPs to probabilities
-                float sum = 0;
+                double sum = 0;
 
                 for (auto& APP : APPs) {
-                    APP = pow(10.0, -APP / 10);
+                    APP = phred2Prob(APP);
                     sum += APP;
                 }
 
@@ -245,14 +263,14 @@ bool hapfuse::load_chunk(const char *F)
                 boost::split(inDat, sampDat[GPIdx], boost::is_any_of(","));
                 assert(inDat.size() == 3);
 
-                vector<float> GPs;
+                vector<double> GPs;
                 for(auto gp : inDat) GPs.push_back(stof(gp));
 
                 // convert GPs to probabilities
-                float sum = 0;
+                double sum = 0;
 
                 for (auto& GP : GPs) {
-                    GP = pow(10.0, -GP / 10);
+                    GP = phred2Prob(GP);
                     sum += GP;
                 }
 
@@ -260,7 +278,7 @@ bool hapfuse::load_chunk(const char *F)
                 pHap1 = GPs[2];
                 pHap2 = GPs[2];
 
-                // swap alleles
+                // swap alleles if evidence exists in GT field
                 if (GT.at(0) != GT.at(2)) {
                     if (GT.at(0) == '1')
                         pHap1 += GPs[1];
@@ -276,6 +294,10 @@ bool hapfuse::load_chunk(const char *F)
                 exit(1);
             }
 
+            // make sure pHap1 and 2 are greater than zero
+            if(pHap1 < 0) pHap1 = 0;
+            if(pHap2 < 0) pHap2 = 0;
+            
             // assign allelic probs
             s.hap[(tokenColIdx-9) * 2] = pHap1;
             s.hap[(tokenColIdx-9) * 2 + 1] = pHap2;
@@ -362,7 +384,7 @@ void hapfuse::work(const char *F)
 
         for (list<Site>::iterator li = site.begin(); li != site.end(); ++ li)
             for (uint m = 0; m < chunk.size(); m++) if (li->pos == chunk[m].pos) {
-                    float *p = &(li->hap[0]), *q = &(chunk[m].hap[0]);
+                    double *p = &(li->hap[0]), *q = &(chunk[m].hap[0]);
 
                     for (uint j = 0; j < in; j++) {
                         sum[j * 2] += p[j * 2] * q[j * 2] + p[j * 2 + 1] * q[j * 2 + 1];
@@ -374,7 +396,7 @@ void hapfuse::work(const char *F)
         for (uint j = 0; j < in; j++)
             if (sum[j * 2] < sum[j * 2 + 1]) {
                 for (uint m = 0; m < chunk.size(); m++) {
-                    float t = chunk[m].hap[j * 2];
+                    double t = chunk[m].hap[j * 2];
                     chunk[m].hap[j * 2] = chunk[m].hap[j * 2 + 1];
                     chunk[m].hap[j * 2 + 1] = t;
                 }
@@ -388,7 +410,7 @@ void hapfuse::work(const char *F)
                     li++) if (li->pos == chunk[m].pos) {
                     found = true;
                     li->cov++;
-                    float *p = &(li->hap[0]), *q = &(chunk[m].hap[0]);
+                    double *p = &(li->hap[0]), *q = &(chunk[m].hap[0]);
 
                     for (uint j = 0; j < in * 2; j++) p[j] += q[j];
                 }
@@ -403,7 +425,7 @@ void hapfuse::work(const char *F)
             li++) li->write(vcf);
 
     fclose(vcf);
-}
+}    
 
 void hapfuse::document(void)
 {

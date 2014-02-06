@@ -180,6 +180,8 @@ bool hapfuse::load_chunk(const char *F)
         s.all[0] = tokens[3][0];
         s.all[1] = tokens[4][0];
 
+//        cerr << s.chr << ":" << s.pos << endl;
+        
         vector<string> GTFields;
         boost::split(GTFields, tokens[8], boost::is_any_of(":"));
         int GTIdx = -1;
@@ -199,18 +201,19 @@ bool hapfuse::load_chunk(const char *F)
 
 
         // read sample specific data
-        for (uint i = 9; i < tokens.size(); ++i) {
+        for (uint tokenColIdx = 9; tokenColIdx < tokens.size(); ++tokenColIdx) {
+//            cerr << " " << tokenColIdx;
             vector<string> sampDat;
-            boost::split(sampDat, tokens[i], boost::is_any_of(":"));
+            boost::split(sampDat, tokens[tokenColIdx], boost::is_any_of(":"));
+            assert(sampDat.size() > 1);
 
             // parse haps
-            vector<string> alleles;
-            boost::split(alleles, sampDat[GTIdx], boost::is_any_of("|"));
-
-            if (alleles.size() != 2) {
-                cerr << "Error in GT data, could not split on '|': " << sampDat[GTIdx] << endl;
+            string GT = sampDat[GTIdx];
+            if (GT.at(1) != '|' || GT.size() != 3) {
+                cerr << "Error in GT data, could not split on '|': " << GT << endl;
                 exit(1);
             }
+
 
             // extract/estimate allelic probabilities
             float pHap1, pHap2;
@@ -258,8 +261,8 @@ bool hapfuse::load_chunk(const char *F)
                 pHap2 = GPs[2];
 
                 // swap alleles
-                if (alleles[0] != alleles[1]) {
-                    if (alleles[0] == "1")
+                if (GT.at(0) != GT.at(2)) {
+                    if (GT.at(0) == '1')
                         pHap1 += GPs[1];
                     else
                         pHap2 += GPs[1];
@@ -269,13 +272,13 @@ bool hapfuse::load_chunk(const char *F)
                 }
             }
             else{
-                cerr << "could not load GP or APP field: " << tokens[i] << endl;
+                cerr << "could not load GP or APP field: " << tokens[tokenColIdx] << endl;
                 exit(1);
             }
 
             // assign allelic probs
-            s.hap[i * 2] = pHap1;
-            s.hap[i * 2 + 1] = pHap2;
+            s.hap[(tokenColIdx-9) * 2] = pHap1;
+            s.hap[(tokenColIdx-9) * 2 + 1] = pHap2;
         }
 
         chunk.push_back(s);

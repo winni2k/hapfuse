@@ -21,25 +21,79 @@
 #include <cmath>
 #include <cfloat>
 
+#include <boost/spirit/include/qi.hpp>
+#include <boost/spirit/include/phoenix_core.hpp>
+#include <boost/spirit/include/phoenix_operator.hpp>
+#include <boost/spirit/include/phoenix_stl.hpp>
+
 #define BUFFER_SIZE 1000000 // 65536 chars is not big enough for more than ~50,000 samples
 #define EPSILON 0.001 // precision of input floats
 
+namespace vcfParse {
+
+//[tutorial_adder_using
+namespace qi = boost::spirit::qi;
+namespace ascii = boost::spirit::ascii;
+namespace phoenix = boost::phoenix;
+
+using qi::double_;
+using qi::_1;
+using ascii::space;
+using phoenix::push_back;
+
+
+//]
+
+///////////////////////////////////////////////////////////////////////////
+//  Our adder
+///////////////////////////////////////////////////////////////////////////
+
+//[tutorial_adder
+template <typename Iterator>
+bool parseProbs(Iterator first, Iterator last, std::vector<double>& probs)
+{
+    bool r = qi::phrase_parse(first, last,
+
+                              //  Begin grammar
+                              (
+                                  double_[push_back(phoenix::ref(probs),
+                                          _1)] >> *(',' >> double_[push_back(phoenix::ref(probs), _1)])
+                              )
+                              ,
+
+                              //  End grammar
+                              space);
+
+    if (first != last) // fail if we did not get a full match
+        return false;
+
+    return r;
+}
+
+//]
+}
 
 using namespace std;
 
 // converts a probability to phred scale
-double prob2Phred(double prob){
+double prob2Phred(double prob)
+{
     assert(prob >= 0 - EPSILON);
-    if(prob < 0) prob = 0;
-    if(prob == 0) return DBL_MAX_10_EXP * 10;
-    else if(prob >= 1) return 2*DBL_MIN; // 0 comes out negative zero on my system, not cool!
+
+    if (prob < 0) prob = 0;
+
+    if (prob == 0) return DBL_MAX_10_EXP * 10;
+    else if (prob >= 1) return 2 *
+                                   DBL_MIN; // 0 comes out negative zero on my system, not cool!
     else return -10 * log10(prob);
 }
 
 //converts a phred scaled probability back to a probability
-double phred2Prob(double phred){
+double phred2Prob(double phred)
+{
     assert(phred >= 0);
-    if(phred >= DBL_MAX_10_EXP*10) return DBL_MIN;
+
+    if (phred >= DBL_MAX_10_EXP * 10) return DBL_MIN;
     else return pow(10, -phred / 10);
 }
 
@@ -198,8 +252,8 @@ bool hapfuse::load_chunk(const char *F)
         s.all[0] = tokens[3][0];
         s.all[1] = tokens[4][0];
 
-//        cerr << s.chr << ":" << s.pos << endl;
-        
+        //        cerr << s.chr << ":" << s.pos << endl;
+
         vector<string> GTFields;
         boost::split(GTFields, tokens[8], boost::is_any_of(":"));
         int GTIdx = -1;
@@ -220,13 +274,15 @@ bool hapfuse::load_chunk(const char *F)
 
         // read sample specific data
         for (uint tokenColIdx = 9; tokenColIdx < tokens.size(); ++tokenColIdx) {
-//            cerr << " " << tokenColIdx;
+
+            //            cerr << " " << tokenColIdx;
             vector<string> sampDat;
             boost::split(sampDat, tokens[tokenColIdx], boost::is_any_of(":"));
             assert(sampDat.size() > 1);
 
             // parse haps
             string GT = sampDat[GTIdx];
+
             if (GT.at(1) != '|' || GT.size() != 3) {
                 cerr << "Error in GT data, could not split on '|': " << GT << endl;
                 exit(1);
@@ -235,13 +291,19 @@ bool hapfuse::load_chunk(const char *F)
 
             // extract/estimate allelic probabilities
             double pHap1, pHap2;
-            if (APPIdx >= 0) {
-                vector<string> inDat;
-                boost::split(inDat, sampDat[APPIdx], boost::is_any_of(","));
-                assert(inDat.size() == 2);
 
+            if (APPIdx >= 0) {
                 vector<double> APPs;
-                for(auto app : inDat) APPs.push_back(stof(app));
+
+                if (!vcfParse::parseProbs(sampDat[APPIdx].begin(), sampDat[APPIdx].end(),
+                                          APPs)) {
+                    cerr << "Could not parse: " << sampDat[GPIdx] << endl;
+                    exit(1);
+                }
+
+
+                //                boost::split(inDat, , boost::is_any_of(","));
+                assert(APPs.size() == 2);
 
                 // convert GPs to probabilities
                 double sum = 0;
@@ -259,12 +321,15 @@ bool hapfuse::load_chunk(const char *F)
             // parse GPs
             else if (GPIdx >= 0) {
 
-                vector<string> inDat;
-                boost::split(inDat, sampDat[GPIdx], boost::is_any_of(","));
-                assert(inDat.size() == 3);
-
                 vector<double> GPs;
-                for(auto gp : inDat) GPs.push_back(stof(gp));
+
+                if (!vcfParse::parseProbs(sampDat[GPIdx].begin(), sampDat[GPIdx].end(), GPs)) {
+                    cerr << "Could not parse: " << sampDat[GPIdx] << endl;
+                    exit(1);
+                }
+
+                //                boost::split(inDat, sampDat[GPIdx], boost::is_any_of(","));
+                assert(GPs.size() == 3);
 
                 // convert GPs to probabilities
                 double sum = 0;
@@ -288,19 +353,19 @@ bool hapfuse::load_chunk(const char *F)
                     pHap1 += GPs[1] / 2;
                     pHap2 += GPs[1] / 2;
                 }
-            }
-            else{
+            } else {
                 cerr << "could not load GP or APP field: " << tokens[tokenColIdx] << endl;
                 exit(1);
             }
 
             // make sure pHap1 and 2 are greater than zero
-            if(pHap1 < 0) pHap1 = 0;
-            if(pHap2 < 0) pHap2 = 0;
-            
+            if (pHap1 < 0) pHap1 = 0;
+
+            if (pHap2 < 0) pHap2 = 0;
+
             // assign allelic probs
-            s.hap[(tokenColIdx-9) * 2] = pHap1;
-            s.hap[(tokenColIdx-9) * 2 + 1] = pHap2;
+            s.hap[(tokenColIdx - 9) * 2] = pHap1;
+            s.hap[(tokenColIdx - 9) * 2 + 1] = pHap2;
         }
 
         chunk.push_back(s);
@@ -425,7 +490,7 @@ void hapfuse::work(const char *F)
             li++) li->write(vcf);
 
     fclose(vcf);
-}    
+}
 
 void hapfuse::document(void)
 {
@@ -490,6 +555,10 @@ int main(int argc, char **argv)
     hf.work(outFile.c_str());
     return 0;
 }
+
+
+
+
 
 
 

@@ -1,0 +1,3 @@
+// the configured options and settings for Tutorial
+#define hapfuse_VERSION_MAJOR @hapfuse_VERSION_MAJOR@
+#define hapfuse_VERSION_MINOR @hapfuse_VERSION_MINOR@

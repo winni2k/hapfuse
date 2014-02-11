@@ -3,7 +3,7 @@ project (hapfuse)
 
 # find and include boost!
 #set(Boost_USE_STATIC_LIBS   OFF)
-set(Boost_USE_MULTITHREADED ON)
+#set(Boost_USE_MULTITHREADED ON)
 #set(Boost_DEBUG ON)
 FIND_PACKAGE(Boost)
 #find_package(Boost 1.49 COMPONENTS system filesystem REQUIRED)

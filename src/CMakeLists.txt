@@ -61,4 +61,8 @@ target_link_libraries (hapfuse ${Boost_LIBRARIES})
 
 # testing
 enable_testing()
-add_test (hapfuseRuns hapfuse)
+
+# does it run?
+set(TEST_DIR "Testing")
+add_test (hapfuseRuns hapfuse -o ${TEST_DIR}/hapfuseRuns.vcf ../samples/test.1ColPart1.vcf ../samples/test.1ColPart2.vcf)
+add_test(hapfuseFuses ${CMAKE_COMMAND} -E compare_files ${TEST_DIR}/hapfuseRuns.vcf ../samples/test.1Col.hapfuse.expected.vcf)

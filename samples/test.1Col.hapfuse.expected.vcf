@@ -1,5 +1,5 @@
 ##fileformat=VCFv4.1
-##source=BCM:SNPTools:hapfuse
+##source=BCM:SNPTools:hapfuseV0.2
 ##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
 ##FORMAT=<ID=GP,Number=3,Type=Float,Description="Phred-scaled genotype posterior probabilities">
 ##FORMAT=<ID=APP,Number=2,Type=Float,Description="Phred-scaled allelic probability, P(Allele=1|Haplotype)">

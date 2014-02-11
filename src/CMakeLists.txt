@@ -18,7 +18,7 @@ link_directories(${Boost_LIBRARIES})
 
 # The version number.
 set (hapfuse_VERSION_MAJOR 0)
-set (hapfuse_VERSION_MINOR 1)
+set (hapfuse_VERSION_MINOR 2)
 
 SET(CMAKE_CXX_FLAGS "-std=c++11")
 

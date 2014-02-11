@@ -5,6 +5,7 @@
 @date 04/01/2011
 */
 #include <iostream>
+#include <iomanip>
 #include <algorithm>
 #include <dirent.h>
 #include <stdint.h>
@@ -72,15 +73,15 @@ struct Site {
   static bool is_x;
   static vector<bool> is_male;
 
-  void write(FILE *F);
+  void write(ofile &fusedVCF);
 };
 
 bool Site::is_x;
 vector<bool> Site::is_male;
 
-void Site::write(FILE *F) {
-  fprintf(F, "%s\t%u\t.\t%c\t%c\t100\tPASS\t.\tGT:GP:APP", chr.c_str(), pos,
-          all[0], all[1]);
+void Site::write(ofile &fusedVCF) {
+    fusedVCF << chr.c_str() << "\t" << pos << "\t.\t" <<
+        all[0] << "\t" << all[1] << "\t100\tPASS\t.\tGT:GP:APP";
   uint in = hap.size() / 2;
   double k = 1.0 / cov;
   bool is_par = (pos >= 60001 && pos <= 2699520) ||
@@ -123,11 +124,11 @@ void Site::write(FILE *F) {
     p0 = prob2Phred(p0);
     p1 = prob2Phred(p1);
 
-    fprintf(F, "\t%u|%u:%.3f,%.3f,%.3f:%.3f,%.3f", a, b, GPs[0], GPs[1], GPs[2],
-            p0, p1);
+    fusedVCF << "\t" << a << "|" <<  b << ":" << GPs[0] << "," << GPs[1]<< "," <<GPs[2]<< ":" <<
+        p0<< "," << p1;
   }
 
-  fprintf(F, "\n");
+  fusedVCF << "\n";
 }
 
 class hapfuse {
@@ -140,7 +141,7 @@ private:
   vector<Site> chunk;
   set<string> male;
 
-  void vcf_head(const char *F);
+  void vcf_head(ofile &fusedVCF);
   bool load_chunk(const char *F);
 
 public:
@@ -148,7 +149,7 @@ public:
   bool gender(const char *F);
   bool load_dir(const char *D);
   bool load_files(const vector<string> &inFiles);
-  void work(const char *F);
+  void work(string outputFile);
 };
 
 bool hapfuse::gender(const char *F) {
@@ -400,18 +401,18 @@ bool hapfuse::load_chunk(const char *F) {
   return true;
 }
 
-void hapfuse::vcf_head(const char *F) {
-  vcf = fopen(F, "wt");
-  fprintf(vcf, "##fileformat=VCFv4.1\n");
-  fprintf(vcf, "##source=BCM:SNPTools:hapfuse\n");
-  fprintf(vcf,
-          "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">\n");
-  fprintf(vcf, "##FORMAT=<ID=GP,Number=3,Type=Float,Description=\"Phred-scaled "
-               "genotype posterior probabilities\">\n");
+void hapfuse::vcf_head(ofile &fusedVCF) {
+  fusedVCF << "##fileformat=VCFv4.1\n";
+  fusedVCF << "##source=BCM:SNPTools:hapfuseV" << hapfuse_VERSION_MAJOR << "."
+           << hapfuse_VERSION_MINOR << "\n";
+  fusedVCF
+      << "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">\n";
+  fusedVCF << "##FORMAT=<ID=GP,Number=3,Type=Float,Description=\"Phred-scaled "
+              "genotype posterior probabilities\">\n";
 
-  fprintf(vcf, "##FORMAT=<ID=APP,Number=2,Type=Float,Description=\"Phred-"
-               "scaled allelic probability, P(Allele=1|Haplotype)\">\n");
-  fprintf(vcf, "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT");
+  fusedVCF << "##FORMAT=<ID=APP,Number=2,Type=Float,Description=\"Phred-"
+           << "scaled allelic probability, P(Allele=1|Haplotype)\">\n";
+  fusedVCF << "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT";
 }
 
 bool hapfuse::load_dir(const char *D) {
@@ -423,7 +424,7 @@ bool hapfuse::load_dir(const char *D) {
   DIR *dir = opendir(D);
 
   if (dir == NULL) {
-    cerr << "fail to open " << D << endl;
+    cerr << "fail to open " << D << "\n";
     return false;
   }
 
@@ -449,8 +450,11 @@ bool hapfuse::load_files(const vector<string> &inFiles) {
   return true;
 }
 
-void hapfuse::work(const char *F) {
-  vcf_head(F);
+void hapfuse::work(string outputFile) {
+
+  ofile fusedVCF(outputFile);
+  fusedVCF << std::fixed << std::setprecision(3);
+  vcf_head(fusedVCF);
   vector<double> sum;
 
   for (uint i = 0; i < file.size(); i++) {
@@ -459,13 +463,13 @@ void hapfuse::work(const char *F) {
 
     if (!i) {
       for (uint i = 0; i < in; i++)
-        fprintf(vcf, "\t%s", name[i].c_str());
+          fusedVCF << "\t" << name[i];
 
-      fprintf(vcf, "\n");
+      fusedVCF << "\n";
     }
 
     while (!site.empty() && site.front().pos < chunk[0].pos) {
-      site.front().write(vcf);
+      site.front().write(fusedVCF);
       site.pop_front();
     }
 
@@ -515,9 +519,9 @@ void hapfuse::work(const char *F) {
   }
 
   for (list<Site>::iterator li = site.begin(); li != site.end(); li++)
-    li->write(vcf);
+    li->write(fusedVCF);
 
-  fclose(vcf);
+  fusedVCF.close();
 }
 
 void hapfuse::document(void) {
@@ -582,6 +586,6 @@ int main(int argc, char **argv) {
     hf.document();
   }
 
-  hf.work(outFile.c_str());
+  hf.work(outFile);
   return 0;
 }

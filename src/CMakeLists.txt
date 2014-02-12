@@ -2,19 +2,28 @@ cmake_minimum_required (VERSION 2.6)
 project (hapfuse)
 
 # find and include boost!
-#set(Boost_USE_STATIC_LIBS   OFF)
-#set(Boost_USE_MULTITHREADED ON)
+set(CMAKE_VERBOSE_MAKEFILE TRUE)
+set(Boost_USE_STATIC_LIBS   ON)
+set(Boost_USE_MULTITHREADED OFF)
+set(Boost_USE_STATIC_RUNTIME ON) 
 #set(Boost_DEBUG ON)
 FIND_PACKAGE(Boost)
+FIND_PACKAGE(ZLIB REQUIRED)
+FIND_LIBRARY(IOSTREAMS NAMES libboost_iostreams.a)
+message(status "** iostreams lib:	${IOSTREAMS}")
+message(status "** ZLib Include:	${ZLIB_INCLUDE_DIR}")
+message(status "** ZLib Libraries:	${ZLIB_LIBRARIES}")
 #find_package(Boost 1.49 COMPONENTS system filesystem REQUIRED)
-include_directories(${Boost_INCLUDE_DIRS})
-link_directories(${Boost_LIBRARIES})
+include_directories(${Boost_INCLUDE_DIRS} ${ZLIB_INCLUDE_DIR})
+link_directories(${Boost_LIBRARIES} ${ZLIB_LIBRARIES})
 
 #message(status "** Boost Include: ${Boost_INCLUDE_DIR}")
 #message(status "** Boost Libraries: ${Boost_LIBRARY_DIRS}")
 #message(status "** Boost Libraries: ${Boost_LIBRARIES}")
 #message(status "** Boost Libraries: ${Boost_LIBRARY_DIR}")
 
+add_library(boostIO STATIC IMPORTED)
+set_property(TARGET boostIO PROPERTY IMPORTED_LOCATION ${IOSTREAMS})
 
 # The version number.
 set (hapfuse_VERSION_MAJOR 0)
@@ -45,7 +54,9 @@ add_subdirectory (utils)
 # add executable
 add_executable( hapfuse hapfuse.cpp)
 target_link_libraries (hapfuse utils)
-target_link_libraries (hapfuse ${Boost_LIBRARIES})
+target_link_libraries (hapfuse boostIO)
+target_link_libraries (hapfuse  ${ZLIB_LIBRARIES} -lgsl -lgslcblas -lbz2 -lm -lstdc++ -lz)
+#target_link_libraries (hapfuse ${ZLIB_LIBRARIES})
 
 
 # add the install targets

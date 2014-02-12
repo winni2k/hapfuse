@@ -1,3 +1,6 @@
+
+//#define BOOST_SPIRIT_DEBUG
+
 #include <iostream>
 
 using namespace std;
@@ -6,6 +9,9 @@ using namespace std;
 namespace qi = boost::spirit::qi;
 #include <boost/spirit/include/phoenix_stl.hpp>
 namespace phoenix = boost::phoenix;
+
+// ford hold[]
+using boost::spirit::qi::hold;
 
 //
 // boost format for debugging
@@ -37,13 +43,16 @@ struct t_genotype {
   char allele1;
   char phase;
   char allele2;
-  std::array<float, 3> probs;
+  std::array<float, 2> probs; // genotype probs (GP)
+  //    std::array<float, 2> aprobs;// allelic probs (APP)
+  //  std::array<float, 5> probs;
 };
 
 BOOST_FUSION_ADAPT_STRUCT(t_genotype,
                           (char, allele1)(char, phase)(char, allele2)(
-                              float, probs[0])(float, probs[1])(float,
-                                                                probs[2]))
+                              float, probs[0])(float, probs[1]))
+//(float,
+//                         probs[2]))(float, aprobs[0])(float, aprobs[0]))
 
 namespace winni {
 
@@ -86,12 +95,18 @@ struct vcf_grammar
     phase %= qi::char_("\\|");
     allele2 %= qi::char_("01");
 
-    genotype %= allele1 > phase > allele2 > ":" > qi::float_ > "," >
-                qi::float_ > -("," > qi::float_);
+    prob %= qi::float_;
+    //    genoProbs %= ":" > prob > "," > prob > -("," > prob);
+
+    genotype %= allele1 > phase > allele2 >
+                omit[":" > prob > "," > prob > "," > prob] > ":" > prob > "," >
+                prob;
+
     genotypes %= genotype % "\t";
 
     //
-    // 	We use the ">" expect operator which means no backtracking (return
+    // 	We use the ">" expect operator which means no backtracking
+    // (return
     // false) once
     // 		the contig is parsed. Failures will throw
     // 	Use ">>" sequence operator otherwise
@@ -116,7 +131,10 @@ struct vcf_grammar
     allele1.name("allele1");
     phase.name("phase");
     allele2.name("allele2");
+    prob.name("prob");
     genotype.name("genotype");
+    genoProbs.name("genoProbs");
+    //    allelicProbs.name("allelicProbs");
     genotypes.name("genotypes");
 
     //
@@ -126,12 +144,17 @@ struct vcf_grammar
     // 		_2 = beg,
     // 		_3 = end
     // 		_4 = errPos,
-    // 		ref to line number (This is a runtime parameter passed in the
+    // 		ref to line number (This is a runtime parameter passed in
+    // the
     // constructor)
     // 		reference to error message
     // 		flag saying whether an error should be thrown.
     // 		This can be set as a runtime parameter like "cnt_line"
     //
+//    BOOST_SPIRIT_DEBUG_NODE(genotype);
+//    BOOST_SPIRIT_DEBUG_NODE(genotypes);
+//    BOOST_SPIRIT_DEBUG_NODE(prob);
+
     qi::on_error<qi::fail>(vcf_line, ::errorHandler_vcf_lines_handler(
                                          _1, _2, _3, _4, phoenix::ref(cnt_line),
                                          phoenix::ref(error_msg), true));
@@ -159,6 +182,9 @@ struct vcf_grammar
   qi::rule<Iterator, char()> allele1;
   qi::rule<Iterator, char()> phase;
   qi::rule<Iterator, char()> allele2;
+  qi::rule<Iterator, vector<float>()> genoProbs;
+  //  qi::rule<Iterator, vector<float>()> allelicProbs;
+  qi::rule<Iterator, float()> prob;
   qi::rule<Iterator, t_genotype()> genotype;
   qi::rule<Iterator, vector<t_genotype>()> genotypes;
   qi::rule<Iterator,

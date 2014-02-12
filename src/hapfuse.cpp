@@ -23,7 +23,7 @@
 #include <cfloat>
 
 #include "vcfParser/vcf_parser.hpp"
-#include "hapfuseConfig.h"
+#include "version.hpp"
 #include "utils/utils.hpp"
 
 #include <boost/spirit/include/qi.hpp>
@@ -80,8 +80,8 @@ bool Site::is_x;
 vector<bool> Site::is_male;
 
 void Site::write(ofile &fusedVCF) {
-    fusedVCF << chr.c_str() << "\t" << pos << "\t.\t" <<
-        all[0] << "\t" << all[1] << "\t100\tPASS\t.\tGT:GP:APP";
+  fusedVCF << chr.c_str() << "\t" << pos << "\t.\t" << all[0] << "\t" << all[1]
+           << "\t100\tPASS\t.\tGT:GP:APP";
   uint in = hap.size() / 2;
   double k = 1.0 / cov;
   bool is_par = (pos >= 60001 && pos <= 2699520) ||
@@ -124,8 +124,8 @@ void Site::write(ofile &fusedVCF) {
     p0 = prob2Phred(p0);
     p1 = prob2Phred(p1);
 
-    fusedVCF << "\t" << a << "|" <<  b << ":" << GPs[0] << "," << GPs[1]<< "," <<GPs[2]<< ":" <<
-        p0<< "," << p1;
+    fusedVCF << "\t" << a << "|" << b << ":" << GPs[0] << "," << GPs[1] << ","
+             << GPs[2] << ":" << p0 << "," << p1;
   }
 
   fusedVCF << "\n";
@@ -249,9 +249,12 @@ bool hapfuse::load_chunk(const char *F) {
     string::const_iterator pos = buffer.cbegin();
     bool success = qi::parse(pos, buffer.cend(), grammar, contig, genomic_pos,
                              ref, alt, format, genotypes);
+    if(!success){
+        cerr << "Could not parse line number " << cnt_lines << " at position " << *pos << endl;
+        exit(1);
+    }
 
-    //    vector<string> tokens;
-    //    boost::split(tokens, buffer, boost::is_any_of("\t"));
+    // start filling the site data
     s.chr = contig;
     s.pos = genomic_pos;
     assert(ref.size() == 1);
@@ -259,44 +262,9 @@ bool hapfuse::load_chunk(const char *F) {
     s.all[0] = ref[0];
     s.all[1] = alt[0];
 
-    //        cerr << s.chr << ":" << s.pos << endl;
-
-    //    vector<string> GTFields;
-    //    boost::split(GTFields, tokens[8], boost::is_any_of(":"));
-    //    int GTIdx = -1;
-    //    int GPIdx = -1;
-    //    int APPIdx = -1;
-
-    /*    for (unsigned fieldIdx = 0; fieldIdx < GTFields.size(); ++fieldIdx) {
-          if (GTFields[fieldIdx].compare("GT") == 0)
-            GTIdx = fieldIdx;
-          else if (GTFields[fieldIdx].compare("GP") == 0)
-            GPIdx = fieldIdx;
-          else if (GTFields[fieldIdx].compare("APP") == 0)
-            APPIdx = fieldIdx;
-        }
-
-        if (!(GTIdx >= 0 && (GPIdx >= 0 || APPIdx >= 0))) {
-          cerr << "expected GT:GP or GT:APP input format in chunk " << F <<
-       endl;
-          exit(1);
-        }
-    */
     // read sample specific data
     unsigned genotypeIdx = 0;
     for (auto genotype : genotypes) {
-      //    for (uint tokenColIdx = 9; tokenColIdx < tokens.size();
-      // ++tokenColIdx) {
-
-      //            cerr << " " << tokenColIdx;
-      //      vector<string> sampDat;
-      //      boost::split(sampDat, tokens[tokenColIdx], boost::is_any_of(":"));
-      //      assert(sampDat.size() > 1);
-
-      // parse haps
-      //      string GT = sampDat[GTIdx];
-
-      //      if (GT.at(1) != '|' || GT.size() != 3) {
       if (genotype.phase != '|') {
         cerr << "Error in GT data, genotype is not phased. Phase found: "
              << genotype.phase << endl;
@@ -306,60 +274,46 @@ bool hapfuse::load_chunk(const char *F) {
       // extract/estimate allelic probabilities
       double pHap1, pHap2;
 
-      //      if (APPIdx >= 0) {
-      if (format == "GT:APP") {
-        /*        vector<double> APPs;
+      // ignore GT/GPP info, just use APP
+      if (format == "GT:GP:APP") {
+        pHap1 = phred2Prob(genotype.probs[0]);
+        pHap2 = phred2Prob(genotype.probs[1]);
 
-                if (!vcfParse::parseProbs(sampDat[APPIdx].begin(),
-                                          sampDat[APPIdx].end(), APPs)) {
-                  cerr << "Could not parse: " << sampDat[GPIdx] << endl;
-                  exit(1);
-                }
+      } else if (format == "GT:APP") {
 
-                //                boost::split(inDat, , boost::is_any_of(","));
-                assert(APPs.size() == 2);
-
-                // convert GPs to probabilities
-                double sum = 0;
-
-                for (auto &APP : APPs) {
-                  APP = phred2Prob(APP);
-                  sum += APP;
-                }
-
-                assert(sum < 2 + EPSILON);
-                pHap1 = APPs[0];
-                pHap2 = APPs[1];
-        */
-        throw myException("GT:APP format is not implemented yet.");
+          throw myException("GT:APP format field found. This is not imlemented");
+        pHap1 = phred2Prob(genotype.probs[0]);
+        pHap2 = phred2Prob(genotype.probs[1]);
+        
       }
+
       // parse GPs
-      //      else if (GPIdx >= 0) {
       else if (format == "GT:GP") {
 
-        //        vector<double> GPs;
-
-        /*        if (!vcfParse::parseProbs(sampDat[GPIdx].begin(),
-           sampDat[GPIdx].end(),
-                                          GPs)) {
-                  cerr << "Could not parse: " << sampDat[GPIdx] << endl;
-                  exit(1);
-                  }*/
-
-        //                boost::split(inDat, sampDat[GPIdx],
-        // boost::is_any_of(","));
-        //        assert(GPs.size() == 3);
-        //        assert(genotype.probs[2] != NULL)
-
+          throw myException("GT:GP format field found. This is not imlemented");
         // convert GPs to probabilities
         double sum = 0;
 
         for (auto &GP : genotype.probs) {
+            cerr << "\t" << GP;
           GP = phred2Prob(GP);
           sum += GP;
         }
+        cerr << endl;
 
-        assert(fabs(sum - 1) < EPSILON);
+        // make sure GPs add up to 1...
+        if(fabs(sum - 1) >= EPSILON){
+            cerr << "Gropbs don't add up to 1" << endl;
+            cerr << "File: " << chunkFile << endl;
+            cerr << "Sample: " << name[genotypeIdx] << endl;
+            cerr << "Line: " << cnt_lines << endl;
+            cerr << "Gprobs:";
+            for (auto GP : genotype.probs) 
+                cerr << "\t" << GP;
+            cerr << endl;
+            exit(1);
+        }
+
         pHap1 = genotype.probs[2];
         pHap2 = genotype.probs[2];
 
@@ -463,7 +417,7 @@ void hapfuse::work(string outputFile) {
 
     if (!i) {
       for (uint i = 0; i < in; i++)
-          fusedVCF << "\t" << name[i];
+        fusedVCF << "\t" << name[i];
 
       fusedVCF << "\n";
     }

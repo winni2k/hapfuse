@@ -22,9 +22,9 @@
 #include <cmath>
 #include <cfloat>
 
-#include "vcf_parser.hpp"
+#include "vcfParser/vcf_parser.hpp"
 #include "hapfuseConfig.h"
-#include "utils.hpp"
+#include "utils/utils.hpp"
 
 #include <boost/spirit/include/qi.hpp>
 #include <boost/spirit/include/phoenix_core.hpp>

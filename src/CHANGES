@@ -1,0 +1,4 @@
+v0.3    Wed Feb 12 16:08:46 GMT 2014
+        Made changes in vcf_parse.hpp such that only VCFs with format
+        field of "GT:GP:APP" are accepted
+

@@ -1,6 +1,10 @@
-v0.2 Tue Feb 11 16:55:27 GMT 2014
-     moved to boost filter based hapfuse output. This allows using
-     .vcf and .vcf.gz files as output.
+v0.3    Wed Feb 12 16:08:46 GMT 2014
+        Made changes in vcf_parse.hpp such that only VCFs with format
+        field of "GT:GP:APP" are accepted
+
+v0.2    Tue Feb 11 16:55:27 GMT 2014
+	moved to boost filter based hapfuse output. This allows using
+	.vcf and .vcf.gz files as output.
 
 v0.1 
-     Initial commit
+        Initial commit

@@ -3,6 +3,8 @@ export CXX= g++-4.7+
 debug: DEBUGFLAGS= -ggdb
 debug: CXXFLAGS += -O0
 
+VERSION := $(shell grep VERSION_MAJOR version.hpp | cut -f3 -d' ').$(shell grep VERSION_MINOR version.hpp | cut -f3 -d' ')
+
 #OBJ=objects
 BIN=../bin
 #SRC=src
@@ -17,23 +19,25 @@ export CPLUS_INCLUDE_PATH += :src/olivier
 #export LIBRARY_PATH += :u-wkretzsch-snptools/samtools-0.1.16:u-wkretzsch-snptools/tabix-0.2.5
 #export LD_LIBRARY_PATH += $(LIBRARY_PATH)
 
-all: $(BIN)/hapfuse
+all: $(BIN)/hapfuse.$(VERSION)
 
 $(BIN)/hapfuse: CXXFLAGS += -O3
 
-oxford: $(BIN)/hapfuse
-	cp $< ~/bin
+oxford: $(BIN)/hapfuse.$(VERSION)
+	cd $(BDIR) && cp hapfuse.$(VERSION) ~/bin/
+	cd ~/bin && rm -f hapfuse && ln -s hapfuse.$(VERSION) hapfuse
 
 debug:
 	$(CXX) -E -x c++ - -v < /dev/null
 
-test: $(BIN)/hapfuse
+test: $(BIN)/hapfuse.$(VERSION)
 	make -C ../testing
 #test : insti.o impute.o emcchain.o olivier/utils.o haplotype.o kNN.o relationship.hpp.gch
 #	$(MAKE) -C testing
 
 #testDebug:insti.o impute.o emcchain.o olivier/utils.o haplotype.o kNN.o relationship.hpp.gch
 #	$(MAKE) -C testing debug
+
 
 clean:
 	rm -f *.o *.h.gch
@@ -71,8 +75,9 @@ utils/utils.o: utils/utils.cpp utils/utils.hpp.gch
 OBJECT_FILES = utils/utils.o
 HEADER_FILES = utils/utils.hpp.gch vcfParser/vcf_parser.hpp.gch version.hpp.gch
 
-$(BIN)/hapfuse: hapfuse.cpp $(OBJECT_FILES) $(HEADER_FILES)
+$(BIN)/hapfuse.$(VERSION): hapfuse.cpp $(OBJECT_FILES) $(HEADER_FILES)
 	$(CXX) $(CXXFLAGS) -o $@ $< $(OBJECT_FILES) $(LIBS)
+	cd $(BIN) && rm -f hapfuse && ln -s hapfuse.$(VERSION) hapfuse
 
 #instiO0: $(OBJECT_FILES)
 #	$(CXX) $(CXXFLAGS) -o $@ $(OBJECT_FILES) $(LIBS)

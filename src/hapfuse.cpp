@@ -249,9 +249,10 @@ bool hapfuse::load_chunk(const char *F) {
     string::const_iterator pos = buffer.cbegin();
     bool success = qi::parse(pos, buffer.cend(), grammar, contig, genomic_pos,
                              ref, alt, format, genotypes);
-    if(!success){
-        cerr << "Could not parse line number " << cnt_lines << " at position " << *pos << endl;
-        exit(1);
+    if (!success) {
+      cerr << "Could not parse line number " << cnt_lines << " at position "
+           << *pos << endl;
+      exit(1);
     }
 
     // start filling the site data
@@ -281,37 +282,37 @@ bool hapfuse::load_chunk(const char *F) {
 
       } else if (format == "GT:APP") {
 
-          throw myException("GT:APP format field found. This is not imlemented");
+        throw myException("GT:APP format field found. This is not imlemented");
         pHap1 = phred2Prob(genotype.probs[0]);
         pHap2 = phred2Prob(genotype.probs[1]);
-        
+
       }
 
       // parse GPs
       else if (format == "GT:GP") {
 
-          throw myException("GT:GP format field found. This is not imlemented");
+        throw myException("GT:GP format field found. This is not imlemented");
         // convert GPs to probabilities
         double sum = 0;
 
         for (auto &GP : genotype.probs) {
-            cerr << "\t" << GP;
+          cerr << "\t" << GP;
           GP = phred2Prob(GP);
           sum += GP;
         }
         cerr << endl;
 
         // make sure GPs add up to 1...
-        if(fabs(sum - 1) >= EPSILON){
-            cerr << "Gropbs don't add up to 1" << endl;
-            cerr << "File: " << chunkFile << endl;
-            cerr << "Sample: " << name[genotypeIdx] << endl;
-            cerr << "Line: " << cnt_lines << endl;
-            cerr << "Gprobs:";
-            for (auto GP : genotype.probs) 
-                cerr << "\t" << GP;
-            cerr << endl;
-            exit(1);
+        if (fabs(sum - 1) >= EPSILON) {
+          cerr << "Gropbs don't add up to 1" << endl;
+          cerr << "File: " << chunkFile << endl;
+          cerr << "Sample: " << name[genotypeIdx] << endl;
+          cerr << "Line: " << cnt_lines << endl;
+          cerr << "Gprobs:";
+          for (auto GP : genotype.probs)
+            cerr << "\t" << GP;
+          cerr << endl;
+          exit(1);
         }
 
         pHap1 = genotype.probs[2];
@@ -479,8 +480,6 @@ void hapfuse::work(string outputFile) {
 }
 
 void hapfuse::document(void) {
-  cerr << "\nhapfuse v" << hapfuse_VERSION_MAJOR << "."
-       << hapfuse_VERSION_MINOR;
   cerr << "\njoint chunked haplotypes into chromosome wide haplotypes";
   cerr << "\nauthor Warren W Kretzschmar @ Marchini Group @ U of Oxford";
   cerr << "\nbased on code by Yi Wang @ Fuli Yu' Group @ BCM-HGSC";
@@ -495,6 +494,9 @@ void hapfuse::document(void) {
 }
 
 int main(int argc, char **argv) {
+
+  cerr << "hapfuse -- v" << hapfuse_VERSION_MAJOR << "."
+       << hapfuse_VERSION_MINOR << endl;
   if (argc < 3)
     hapfuse::document();
 

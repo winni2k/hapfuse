@@ -24,7 +24,7 @@ all: $(BIN)/hapfuse.$(VERSION)
 $(BIN)/hapfuse: CXXFLAGS += -O3
 
 oxford: $(BIN)/hapfuse.$(VERSION)
-	cd $(BDIR) && cp hapfuse.$(VERSION) ~/bin/
+	cd $(BIN) && cp hapfuse.$(VERSION) ~/bin/
 	cd ~/bin && rm -f hapfuse && ln -s hapfuse.$(VERSION) hapfuse
 
 debug:

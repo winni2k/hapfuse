@@ -76,6 +76,7 @@ OBJECT_FILES = utils/utils.o
 HEADER_FILES = utils/utils.hpp.gch vcfParser/vcf_parser.hpp.gch version.hpp.gch
 
 $(BIN)/hapfuse.$(VERSION): hapfuse.cpp $(OBJECT_FILES) $(HEADER_FILES)
+	mkdir -p $(BIN)
 	$(CXX) $(CXXFLAGS) -o $@ $< $(OBJECT_FILES) $(LIBS)
 	cd $(BIN) && rm -f hapfuse && ln -s hapfuse.$(VERSION) hapfuse
 

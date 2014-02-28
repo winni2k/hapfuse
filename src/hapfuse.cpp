@@ -13,6 +13,7 @@
 #include <fstream>
 #include <sstream>
 #include <cstdio>
+#include <cstdlib>
 #include <string>
 #include <vector>
 #include <zlib.h>
@@ -22,21 +23,16 @@
 #include <cmath>
 #include <cfloat>
 
-#include "vcfParser/vcf_parser.hpp"
 #include "version.hpp"
-#include "utils/utils.hpp"
+#include "utils.hpp"
 
-#include <boost/spirit/include/qi.hpp>
-#include <boost/spirit/include/phoenix_core.hpp>
-#include <boost/spirit/include/phoenix_operator.hpp>
-#include <boost/spirit/include/phoenix_stl.hpp>
 
 #define BUFFER_SIZE                                                            \
   1000000 // 65536 chars is not big enough for more than ~50,000 samples
 #define EPSILON 0.001 // precision of input floats
 
 using namespace std;
-using namespace winni;
+// using namespace winni;
 
 // converts a probability to phred scale
 double prob2Phred(double prob) {
@@ -224,20 +220,17 @@ bool hapfuse::load_chunk(const char *F) {
 
   // loading grammar to parse vcf lines
   unsigned cnt_lines = 0;
-  vcf_grammar<string::const_iterator> grammar(cnt_lines);
+  //  vcf_grammar<string::const_iterator> grammar(cnt_lines);
 
   while (getline(chunkFD, buffer, '\n')) {
 
     ++cnt_lines;
 
     // data to hold results of parsing
-    string contig;
-    unsigned genomic_pos;
-    string ref;
-    string alt;
-    string format;
-    vector<t_genotype> genotypes;
+    //    string format;
+    //    vector<t_genotype> genotypes;
 
+    /*
     //
     // pos will point to where parsing stops.
     // Should == buff.cend() if grammar is intended to consume whole line
@@ -246,90 +239,142 @@ bool hapfuse::load_chunk(const char *F) {
     // arguments (contig, genomic_pos etc.)
     // This list must be <= 9 (google SPIRIT_ARGUMENTS_LIMIT)
     //
-    string::const_iterator pos = buffer.cbegin();
-    bool success = qi::parse(pos, buffer.cend(), grammar, contig, genomic_pos,
-                             ref, alt, format, genotypes);
-    if (!success) {
-      cerr << "Could not parse line number " << cnt_lines << " at position "
-           << *pos << endl;
+//    string::const_iterator pos = buffer.cbegin();
+//    bool success = qi::parse(pos, buffer.cend(), grammar, contig, genomic_pos,
+//                             ref, alt, format, genotypes);
+*/
+
+    vector<string> tokens;
+    boost::split(tokens, buffer, boost::is_any_of("\t"));
+    s.chr = tokens[0];
+    s.pos = strtoul(tokens[1].c_str(), NULL, 0);
+    for (int i = 2; i < 4; ++i)
+      assert(tokens[i].size() == 1);
+    s.all[0] = tokens[3][0];
+    s.all[1] = tokens[4][0];
+
+    //        cerr << s.chr << ":" << s.pos << endl;
+
+    vector<string> GTFields;
+    boost::split(GTFields, tokens[8], boost::is_any_of(":"));
+    int GTIdx = -1;
+    int GPIdx = -1;
+    int APPIdx = -1;
+
+    for (unsigned fieldIdx = 0; fieldIdx < GTFields.size(); ++fieldIdx) {
+      if (GTFields[fieldIdx].compare("GT") == 0)
+        GTIdx = fieldIdx;
+      else if (GTFields[fieldIdx].compare("GP") == 0)
+        GPIdx = fieldIdx;
+      else if (GTFields[fieldIdx].compare("APP") == 0)
+        APPIdx = fieldIdx;
+    }
+
+    if (!(GTIdx >= 0 && (GPIdx >= 0 || APPIdx >= 0))) {
+      cerr << "expected GT:GP, GT:APP or GT:GP:APP input format in chunk " << F
+           << endl;
       exit(1);
     }
 
-    // start filling the site data
-    s.chr = contig;
-    s.pos = genomic_pos;
-    assert(ref.size() == 1);
-    assert(alt.size() == 1);
-    s.all[0] = ref[0];
-    s.all[1] = alt[0];
-
     // read sample specific data
     unsigned genotypeIdx = 0;
-    for (auto genotype : genotypes) {
-      if (genotype.phase != '|') {
+    //    for (auto genotype : genotypes) {
+    for (uint tokenColIdx = 9; tokenColIdx < tokens.size(); ++tokenColIdx) {
+
+      vector<string> sampDat;
+      boost::split(sampDat, tokens[tokenColIdx], boost::is_any_of(":"));
+      assert(sampDat.size() > 1);
+
+      // parse haps
+      string GT = sampDat[GTIdx];
+
+      if (GT.at(1) != '|' || GT.size() != 3) {
+        //      if (genotype.phase != '|') {
         cerr << "Error in GT data, genotype is not phased. Phase found: "
-             << genotype.phase << endl;
+             << GT.at(1) << endl;
         exit(1);
       }
 
       // extract/estimate allelic probabilities
       double pHap1, pHap2;
 
-      // ignore GT/GPP info, just use APP
-      if (format == "GT:GP:APP") {
-        pHap1 = phred2Prob(genotype.probs[0]);
-        pHap2 = phred2Prob(genotype.probs[1]);
+      if (APPIdx >= 0) {
+        // if (format == "GT:APP") {
 
-      } else if (format == "GT:APP") {
+        /*                if (!vcfParse::parseProbs(sampDat[APPIdx].begin(),
+                                                  sampDat[APPIdx].end(), APPs))
+           {
+                          cerr << "Could not parse: " << sampDat[GPIdx] << endl;
+                          exit(1);
+                        }
+        */
 
-        throw myException("GT:APP format field found. This is not imlemented");
-        pHap1 = phred2Prob(genotype.probs[0]);
-        pHap2 = phred2Prob(genotype.probs[1]);
+        vector<string> APPstrings;
+        boost::split(APPstrings, sampDat[APPIdx], boost::is_any_of(","));
+        assert(APPstrings.size() == 2);
+        int numAPPs = 2;
+        vector<double> APPs;
+        APPs.reserve(numAPPs);
+        for(auto APP:APPstrings) APPs.push_back(strtod(APP.c_str(),NULL));
 
-      }
-
-      // parse GPs
-      else if (format == "GT:GP") {
-
-        throw myException("GT:GP format field found. This is not imlemented");
         // convert GPs to probabilities
         double sum = 0;
 
-        for (auto &GP : genotype.probs) {
-          cerr << "\t" << GP;
+        for (auto &APP : APPs) {
+          APP = phred2Prob(APP);
+          sum += APP;
+        }
+
+        assert(sum < 2 + EPSILON);
+        pHap1 = APPs[0];
+        pHap2 = APPs[1];
+      }
+
+      // parse GPs
+      else if (GPIdx >= 0) {
+        //      else if (format == "GT:GP") {
+
+
+        /*        if (!vcfParse::parseProbs(sampDat[GPIdx].begin(),
+           sampDat[GPIdx].end(),
+                                          GPs)) {
+                  cerr << "Could not parse: " << sampDat[GPIdx] << endl;
+                  exit(1);
+                  }*/
+
+        vector<string> GPstrings;
+        boost::split(GPstrings, sampDat[GPIdx], boost::is_any_of(","));
+        int numGPs = 3;
+        assert(GPstrings.size() == numGPs);
+        vector<double> GPs;
+        GPs.reserve(numGPs);
+        for(auto GP:GPstrings) GPs.push_back(strtod(GP.c_str(),NULL));
+
+        // convert GPs to probabilities
+        double sum = 0;
+
+        for (auto &GP : GPs) {
           GP = phred2Prob(GP);
           sum += GP;
         }
-        cerr << endl;
 
-        // make sure GPs add up to 1...
-        if (fabs(sum - 1) >= EPSILON) {
-          cerr << "Gropbs don't add up to 1" << endl;
-          cerr << "File: " << chunkFile << endl;
-          cerr << "Sample: " << name[genotypeIdx] << endl;
-          cerr << "Line: " << cnt_lines << endl;
-          cerr << "Gprobs:";
-          for (auto GP : genotype.probs)
-            cerr << "\t" << GP;
-          cerr << endl;
-          exit(1);
-        }
-
-        pHap1 = genotype.probs[2];
-        pHap2 = genotype.probs[2];
+        assert(fabs(sum - 1) < EPSILON);
+        pHap1 = GPs[2];
+        pHap2 = GPs[2];
 
         // swap alleles if evidence exists in GT field
-        //        if (GT.at(0) != GT.at(2)) {
-        if (genotype.allele1 != genotype.allele2) {
-          //            if (GT.at(0) == '1')
-          if (genotype.allele1 == '1')
-            pHap1 += genotype.probs[1];
+        if (GT.at(0) != GT.at(2)) {
+          //        if (genotype.allele1 != genotype.allele2) {
+          if (GT.at(0) == '1')
+            //          if (genotype.allele1 == '1')
+            pHap1 += GPs[1];
           else
-            pHap2 += genotype.probs[1];
+            pHap2 += GPs[1];
         } else {
-          pHap1 += genotype.probs[1] / 2;
-          pHap2 += genotype.probs[1] / 2;
+          pHap1 += GPs[1] / 2;
+          pHap2 += GPs[1] / 2;
         }
+        
       } else {
         cerr << "could not load GP or APP field: " << buffer << endl;
         exit(1);
@@ -480,10 +525,13 @@ void hapfuse::work(string outputFile) {
 }
 
 void hapfuse::document(void) {
+  cerr << "\nhapfuse v" << hapfuse_VERSION_MAJOR << "."
+       << hapfuse_VERSION_MINOR;
   cerr << "\njoint chunked haplotypes into chromosome wide haplotypes";
   cerr << "\nauthor Warren W Kretzschmar @ Marchini Group @ U of Oxford";
   cerr << "\nbased on code by Yi Wang @ Fuli Yu' Group @ BCM-HGSC";
-  cerr << "\nusage hapfuse [-g genderFile] [-d inFileDir] < -o out.vcf > < vcf "
+  cerr << "\nusage hapfuse [-g genderFile] [-d inFileDir] < -o out.vcf > < "
+          "vcf "
           "files to process in order >";
   cerr << "\n";
   cerr << "\n-g [file]\tFile that indicates which gender each sample is. Only "
@@ -494,9 +542,6 @@ void hapfuse::document(void) {
 }
 
 int main(int argc, char **argv) {
-
-  cerr << "hapfuse -- v" << hapfuse_VERSION_MAJOR << "."
-       << hapfuse_VERSION_MINOR << endl;
   if (argc < 3)
     hapfuse::document();
 

@@ -13,14 +13,14 @@ SKIP: {
     my $resultsDir = "results/$testTag";
     make_path($resultsDir);
     my $expected_file = File::Spec->catfile( qw/ .. samples /,
-        $testTag, qw/ expected.impute.hap / );
+        $testTag, "$testTag.expected.chr20.consensus.STv1.2.13.C100.K100.20_20059716_20399169.first50Samp.vcf.impute.hap" );
     my $resultsName = "$testTag.hapfuse";
     my $results_file =
       File::Spec->catfile( $resultsDir, $resultsName . q/.impute.hap/ );
 
     my $results_vcf =
       File::Spec->catfile( $resultsDir, $resultsName . q/.vcf/ );
-    system "../bin/hapfuse -o $results_vcf ../samples/$testTag/*.bin.vcf";
+    system "../bin/hapfuse -o $results_vcf ../samples/$testTag/$testTag.chr20*.bin.vcf";
 
     # pull haplotypes out of vcf
     system

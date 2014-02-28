@@ -40,7 +40,7 @@ test: $(BIN)/hapfuse.$(VERSION)
 
 
 clean:
-	rm -f *.o *.h.gch
+	rm -f $(OBJECT_FILES) $(HEADER_FILES)
 
 .PHONY: clean
 
@@ -52,28 +52,19 @@ clean:
 %.hpp.gch: %.hpp
 	$(CXX) $(CXXFLAGS) -x c++-header $< -o $@
 
-utls/utils.hpp.gch: utils/utils.hpp
+utils/utils.hpp.gch: utils/utils.hpp
 	$(CXX) $(CXXFLAGS) -x c++-header $< -o $@
 
 vcfParser/vcf_parser.hpp.gch: vcfParser/vcf_parser.hpp
 	$(CXX) $(CXXFLAGS) -x c++-header $< -o $@
 
-#hapfuse.hpp.gch: hainsti.hpp impute.hpp.gch emcchain.hpp.gch olivier/utils.hpp.gch relationship.hpp.gch version.hpp.gch enums.hpp.gch snp.hpp.gch hapPanel.hpp.gch
-#	$(CXX) $(CXXFLAGS) -x c++-header $<
-
-## object files
-#%.o: %.cpp %.hpp.gch
-#	$(CXX) $(CXXFLAGS) -c $< $(LIBS) -o $@
-
 utils/utils.o: utils/utils.cpp utils/utils.hpp.gch
 	$(CXX) $(CXXFLAGS) -Wno-sign-compare -c $< -o $@ $(LIBS)
-
-#main.o: main.cpp version.hpp.gch impute.hpp.gch insti.hpp.gch
-#	$(CXX) $(CXXFLAGS) -c $< $(LIBS)
 
 
 OBJECT_FILES = utils/utils.o
 HEADER_FILES = utils/utils.hpp.gch vcfParser/vcf_parser.hpp.gch version.hpp.gch
+
 
 $(BIN)/hapfuse.$(VERSION): hapfuse.cpp $(OBJECT_FILES) $(HEADER_FILES)
 	mkdir -p $(BIN)

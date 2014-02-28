@@ -32,7 +32,6 @@
 #define EPSILON 0.001 // precision of input floats
 
 using namespace std;
-// using namespace winni;
 
 // converts a probability to phred scale
 double prob2Phred(double prob) {
@@ -218,32 +217,14 @@ bool hapfuse::load_chunk(const char *F) {
   s.cov = 1;
   string a, b;
 
-  // loading grammar to parse vcf lines
+  // parsing each line of data
   unsigned cnt_lines = 0;
-  //  vcf_grammar<string::const_iterator> grammar(cnt_lines);
-
   while (getline(chunkFD, buffer, '\n')) {
 
     ++cnt_lines;
 
-    // data to hold results of parsing
-    //    string format;
-    //    vector<t_genotype> genotypes;
-
-    /*
-    //
-    // pos will point to where parsing stops.
-    // Should == buff.cend() if grammar is intended to consume whole line
-    // Can check for true as well as "success"
-    // Note that the destination of the parse are in a variadic list of
-    // arguments (contig, genomic_pos etc.)
-    // This list must be <= 9 (google SPIRIT_ARGUMENTS_LIMIT)
-    //
-//    string::const_iterator pos = buffer.cbegin();
-//    bool success = qi::parse(pos, buffer.cend(), grammar, contig, genomic_pos,
-//                             ref, alt, format, genotypes);
-*/
-
+    // tokenize on "\t"
+    // fill in site information (s)
     vector<string> tokens;
     boost::split(tokens, buffer, boost::is_any_of("\t"));
     s.chr = tokens[0];
@@ -252,8 +233,6 @@ bool hapfuse::load_chunk(const char *F) {
       assert(tokens[i].size() == 1);
     s.all[0] = tokens[3][0];
     s.all[1] = tokens[4][0];
-
-    //        cerr << s.chr << ":" << s.pos << endl;
 
     vector<string> GTFields;
     boost::split(GTFields, tokens[8], boost::is_any_of(":"));
@@ -299,16 +278,6 @@ bool hapfuse::load_chunk(const char *F) {
       double pHap1, pHap2;
 
       if (APPIdx >= 0) {
-        // if (format == "GT:APP") {
-
-        /*                if (!vcfParse::parseProbs(sampDat[APPIdx].begin(),
-                                                  sampDat[APPIdx].end(), APPs))
-           {
-                          cerr << "Could not parse: " << sampDat[GPIdx] << endl;
-                          exit(1);
-                        }
-        */
-
         vector<string> APPstrings;
         boost::split(APPstrings, sampDat[APPIdx], boost::is_any_of(","));
         assert(APPstrings.size() == 2);
@@ -317,7 +286,7 @@ bool hapfuse::load_chunk(const char *F) {
         APPs.reserve(numAPPs);
         for(auto APP:APPstrings) APPs.push_back(strtod(APP.c_str(),NULL));
 
-        // convert GPs to probabilities
+        // convert APPs to probabilities
         double sum = 0;
 
         for (auto &APP : APPs) {
@@ -332,19 +301,10 @@ bool hapfuse::load_chunk(const char *F) {
 
       // parse GPs
       else if (GPIdx >= 0) {
-        //      else if (format == "GT:GP") {
-
-
-        /*        if (!vcfParse::parseProbs(sampDat[GPIdx].begin(),
-           sampDat[GPIdx].end(),
-                                          GPs)) {
-                  cerr << "Could not parse: " << sampDat[GPIdx] << endl;
-                  exit(1);
-                  }*/
 
         vector<string> GPstrings;
         boost::split(GPstrings, sampDat[GPIdx], boost::is_any_of(","));
-        int numGPs = 3;
+        unsigned numGPs = 3;
         assert(GPstrings.size() == numGPs);
         vector<double> GPs;
         GPs.reserve(numGPs);
@@ -515,7 +475,7 @@ void hapfuse::work(string outputFile) {
         site.push_back(chunk[m]);
     }
 
-    cerr << file[i] << endl;
+    cout << file[i] << endl;
   }
 
   for (list<Site>::iterator li = site.begin(); li != site.end(); li++)

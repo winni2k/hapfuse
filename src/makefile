@@ -15,7 +15,7 @@ export LIBS += -lgsl -lgslcblas -lbz2 $(BOOSTLIB) -lm -lstdc++ -lz
 
 # path variables
 #export CPATH += 
-export CPLUS_INCLUDE_PATH += :src/olivier
+export CPLUS_INCLUDE_PATH += :utils
 #export LIBRARY_PATH += :u-wkretzsch-snptools/samtools-0.1.16:u-wkretzsch-snptools/tabix-0.2.5
 #export LD_LIBRARY_PATH += $(LIBRARY_PATH)
 
@@ -32,12 +32,6 @@ debug:
 
 test: $(BIN)/hapfuse.$(VERSION)
 	make -C ../testing
-#test : insti.o impute.o emcchain.o olivier/utils.o haplotype.o kNN.o relationship.hpp.gch
-#	$(MAKE) -C testing
-
-#testDebug:insti.o impute.o emcchain.o olivier/utils.o haplotype.o kNN.o relationship.hpp.gch
-#	$(MAKE) -C testing debug
-
 
 clean:
 	rm -f $(OBJECT_FILES) $(HEADER_FILES)
@@ -55,21 +49,15 @@ clean:
 utils/utils.hpp.gch: utils/utils.hpp
 	$(CXX) $(CXXFLAGS) -x c++-header $< -o $@
 
-vcfParser/vcf_parser.hpp.gch: vcfParser/vcf_parser.hpp
-	$(CXX) $(CXXFLAGS) -x c++-header $< -o $@
-
 utils/utils.o: utils/utils.cpp utils/utils.hpp.gch
 	$(CXX) $(CXXFLAGS) -Wno-sign-compare -c $< -o $@ $(LIBS)
 
 
 OBJECT_FILES = utils/utils.o
-HEADER_FILES = utils/utils.hpp.gch vcfParser/vcf_parser.hpp.gch version.hpp.gch
+HEADER_FILES = utils/utils.hpp.gch
 
 
 $(BIN)/hapfuse.$(VERSION): hapfuse.cpp $(OBJECT_FILES) $(HEADER_FILES)
 	mkdir -p $(BIN)
 	$(CXX) $(CXXFLAGS) -o $@ $< $(OBJECT_FILES) $(LIBS)
 	cd $(BIN) && rm -f hapfuse && ln -s hapfuse.$(VERSION) hapfuse
-
-#instiO0: $(OBJECT_FILES)
-#	$(CXX) $(CXXFLAGS) -o $@ $(OBJECT_FILES) $(LIBS)

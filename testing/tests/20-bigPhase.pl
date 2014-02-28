@@ -5,6 +5,7 @@ use File::Spec;
 use File::Basename;
 use File::Path qw(make_path remove_tree);
 
+# this test tests APP field parsing
 SKIP: {
     skip "vcftools does not exist on system", 1
       unless qx/which vcftools/ =~ m/.*vcftools$/;

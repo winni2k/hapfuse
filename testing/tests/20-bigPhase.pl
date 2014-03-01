@@ -5,7 +5,8 @@ use File::Spec;
 use File::Basename;
 use File::Path qw(make_path remove_tree);
 
-# this test tests APP field parsing
+# this test tests APP field parsing and fusing
+# APP is quite a bit more accurate than using GP!
 SKIP: {
     skip "vcftools does not exist on system", 1
       unless qx/which vcftools/ =~ m/.*vcftools$/;
@@ -13,7 +14,7 @@ SKIP: {
     my $resultsDir = qw|results/test20|;
     make_path($resultsDir);
     my $expected_file =
-      File::Spec->catfile(qw/ .. samples test20 test20.expected.chr20.consensus.STv1.2.13.C100.K100.20_20059716_20399169.first2Samp.secondIndHapSwapped.impute.hap /);
+      File::Spec->catfile(qw/ .. samples test20 test20.expected.chr20.consensus.STv1.2.13.C100.K100.20_20059716_20399169.first2Samp.secondIndHapSwapped.impute.editedForApp.hap /);
     my $resultsName = "test20.hapfuse";
     my $results_file =
       File::Spec->catfile( $resultsDir, $resultsName . q/.impute.hap/ );

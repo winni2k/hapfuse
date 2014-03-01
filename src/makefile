@@ -1,7 +1,8 @@
 export CXX= g++-4.7+
 
 debug: DEBUGFLAGS= -ggdb
-debug: CXXFLAGS += -O0
+debug: CXXFLAGS+= -O0
+all: CXXFLAGS+= -O3
 
 VERSION := $(shell grep VERSION_MAJOR version.hpp | cut -f3 -d' ').$(shell grep VERSION_MINOR version.hpp | cut -f3 -d' ')
 
@@ -19,16 +20,14 @@ export CPLUS_INCLUDE_PATH += :utils
 #export LIBRARY_PATH += :u-wkretzsch-snptools/samtools-0.1.16:u-wkretzsch-snptools/tabix-0.2.5
 #export LD_LIBRARY_PATH += $(LIBRARY_PATH)
 
-all: $(BIN)/hapfuse.$(VERSION)
 
-$(BIN)/hapfuse: CXXFLAGS += -O3
+all: $(BIN)/hapfuse.$(VERSION)
 
 oxford: $(BIN)/hapfuse.$(VERSION)
 	cd $(BIN) && cp hapfuse.$(VERSION) ~/bin/
 	cd ~/bin && rm -f hapfuse && ln -s hapfuse.$(VERSION) hapfuse
 
-debug:
-	$(CXX) -E -x c++ - -v < /dev/null
+debug: $(BIN)/hapfuse.$(VERSION)
 
 test: $(BIN)/hapfuse.$(VERSION)
 	make -C ../testing

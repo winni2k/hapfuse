@@ -26,7 +26,6 @@
 #include "version.hpp"
 #include "utils.hpp"
 
-
 #define BUFFER_SIZE                                                            \
   1000000 // 65536 chars is not big enough for more than ~50,000 samples
 #define EPSILON 0.001 // precision of input floats
@@ -138,6 +137,10 @@ private:
 
   void vcf_head(ofile &fusedVCF);
   bool load_chunk(const char *F);
+  void extractAPP(const string &sampleDat, double &pHap1,
+                           double &pHap2);
+  void extractGP(const string &sampleDat, string GT, double &pHap1,
+                          double &pHap2);
 
 public:
   static void document(void);
@@ -165,13 +168,76 @@ bool hapfuse::gender(const char *F) {
   return true;
 }
 
+void hapfuse::extractAPP(const string &sampleDat, double &pHap1,
+                         double &pHap2) {
+
+  vector<string> APPstrings;
+  boost::split(APPstrings, sampleDat, boost::is_any_of(","));
+  assert(APPstrings.size() == 2);
+  int numAPPs = 2;
+  vector<double> APPs;
+  APPs.reserve(numAPPs);
+  for (auto APP : APPstrings)
+    APPs.push_back(strtod(APP.c_str(), NULL));
+
+  // convert APPs to probabilities
+  double sum = 0;
+
+  for (auto &APP : APPs) {
+    APP = phred2Prob(APP);
+    sum += APP;
+  }
+
+  assert(sum < 2 + EPSILON);
+  pHap1 = APPs[0];
+  pHap2 = APPs[1];
+}
+
+// extract the GP fields, convert them to allelic probabilities and store in
+// pHap1,2
+void hapfuse::extractGP(const string &sampleDat, string GT, double &pHap1,
+                        double &pHap2) {
+
+  vector<string> GPstrings;
+  boost::split(GPstrings, sampleDat, boost::is_any_of(","));
+  unsigned numGPs = 3;
+  assert(GPstrings.size() == numGPs);
+  vector<double> GPs;
+  GPs.reserve(numGPs);
+  for (auto GP : GPstrings)
+    GPs.push_back(strtod(GP.c_str(), NULL));
+
+  // convert GPs to probabilities
+  double sum = 0;
+
+  for (auto &GP : GPs) {
+    GP = phred2Prob(GP);
+    sum += GP;
+  }
+
+  assert(fabs(sum - 1) < EPSILON);
+  pHap1 = GPs[2];
+  pHap2 = GPs[2];
+
+  // swap alleles if evidence exists in GT field
+  if (GT.at(0) != GT.at(2)) {
+    if (GT.at(0) == '1')
+      pHap1 += GPs[1];
+    else
+      pHap2 += GPs[1];
+  } else {
+    pHap1 += GPs[1] / 2;
+    pHap2 += GPs[1] / 2;
+  }
+}
+
 bool hapfuse::load_chunk(const char *F) {
 
   // open F and make sure it opened ok
   string chunkFile(F);
   ifile chunkFD(F);
   if (!chunkFD.isGood())
-    throw myException("Coludnot open file: " + chunkFile);
+    throw myException("Could not open file: " + chunkFile);
 
   // store each line in buffer
   string buffer;
@@ -180,7 +246,7 @@ bool hapfuse::load_chunk(const char *F) {
   name.clear();
   chunk.clear();
 
-  // skip ahead to
+  // skip headers
   do {
     getline(chunkFD, buffer, '\n');
     if (buffer.size() == 0)
@@ -212,14 +278,15 @@ bool hapfuse::load_chunk(const char *F) {
   for (uint i = 0; i < in; i++)
     Site::is_male[i] = (male.find(name[i]) != male.end());
 
-  Site s;
-  s.hap.resize(in * 2);
-  s.cov = 1;
-  string a, b;
-
   // parsing each line of data
   unsigned cnt_lines = 0;
   while (getline(chunkFD, buffer, '\n')) {
+
+    // s will store the site's information
+    Site s;
+    s.hap.resize(in * 2);
+    s.cov = 1;
+    string a, b;
 
     ++cnt_lines;
 
@@ -256,9 +323,9 @@ bool hapfuse::load_chunk(const char *F) {
     }
 
     // read sample specific data
-    unsigned genotypeIdx = 0;
-    //    for (auto genotype : genotypes) {
-    for (uint tokenColIdx = 9; tokenColIdx < tokens.size(); ++tokenColIdx) {
+    const unsigned firstSampIdx = 9;
+    for (uint tokenColIdx = firstSampIdx; tokenColIdx < tokens.size();
+         ++tokenColIdx) {
 
       vector<string> sampDat;
       boost::split(sampDat, tokens[tokenColIdx], boost::is_any_of(":"));
@@ -268,73 +335,21 @@ bool hapfuse::load_chunk(const char *F) {
       string GT = sampDat[GTIdx];
 
       if (GT.at(1) != '|' || GT.size() != 3) {
-        //      if (genotype.phase != '|') {
         cerr << "Error in GT data, genotype is not phased. Phase found: "
              << GT.at(1) << endl;
         exit(1);
       }
 
       // extract/estimate allelic probabilities
-      double pHap1, pHap2;
-
+      double &pHap1 = s.hap[(tokenColIdx - firstSampIdx) * 2];
+      double &pHap2 = s.hap[(tokenColIdx - firstSampIdx) * 2 + 1];
       if (APPIdx >= 0) {
-        vector<string> APPstrings;
-        boost::split(APPstrings, sampDat[APPIdx], boost::is_any_of(","));
-        assert(APPstrings.size() == 2);
-        int numAPPs = 2;
-        vector<double> APPs;
-        APPs.reserve(numAPPs);
-        for(auto APP:APPstrings) APPs.push_back(strtod(APP.c_str(),NULL));
-
-        // convert APPs to probabilities
-        double sum = 0;
-
-        for (auto &APP : APPs) {
-          APP = phred2Prob(APP);
-          sum += APP;
-        }
-
-        assert(sum < 2 + EPSILON);
-        pHap1 = APPs[0];
-        pHap2 = APPs[1];
+        extractAPP(sampDat[APPIdx], pHap1, pHap2);
       }
 
       // parse GPs
       else if (GPIdx >= 0) {
-
-        vector<string> GPstrings;
-        boost::split(GPstrings, sampDat[GPIdx], boost::is_any_of(","));
-        unsigned numGPs = 3;
-        assert(GPstrings.size() == numGPs);
-        vector<double> GPs;
-        GPs.reserve(numGPs);
-        for(auto GP:GPstrings) GPs.push_back(strtod(GP.c_str(),NULL));
-
-        // convert GPs to probabilities
-        double sum = 0;
-
-        for (auto &GP : GPs) {
-          GP = phred2Prob(GP);
-          sum += GP;
-        }
-
-        assert(fabs(sum - 1) < EPSILON);
-        pHap1 = GPs[2];
-        pHap2 = GPs[2];
-
-        // swap alleles if evidence exists in GT field
-        if (GT.at(0) != GT.at(2)) {
-          //        if (genotype.allele1 != genotype.allele2) {
-          if (GT.at(0) == '1')
-            //          if (genotype.allele1 == '1')
-            pHap1 += GPs[1];
-          else
-            pHap2 += GPs[1];
-        } else {
-          pHap1 += GPs[1] / 2;
-          pHap2 += GPs[1] / 2;
-        }
-        
+        extractGP(sampDat[GPIdx], GT, pHap1, pHap2);
       } else {
         cerr << "could not load GP or APP field: " << buffer << endl;
         exit(1);
@@ -346,14 +361,8 @@ bool hapfuse::load_chunk(const char *F) {
 
       if (pHap2 < 0)
         pHap2 = 0;
-
-      // assign allelic probs
-      s.hap[genotypeIdx * 2] = pHap1;
-      s.hap[genotypeIdx * 2 + 1] = pHap2;
     }
-
     chunk.push_back(s);
-    ++genotypeIdx;
   }
 
   chunkFD.close();

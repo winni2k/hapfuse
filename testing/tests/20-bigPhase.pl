@@ -13,7 +13,7 @@ SKIP: {
     my $resultsDir = qw|results/test20|;
     make_path($resultsDir);
     my $expected_file =
-      File::Spec->catfile(qw/ .. samples test20 expected.impute.hap /);
+      File::Spec->catfile(qw/ .. samples test20 test20.expected.chr20.consensus.STv1.2.13.C100.K100.20_20059716_20399169.first2Samp.secondIndHapSwapped.impute.hap /);
     my $resultsName = "test20.hapfuse";
     my $results_file =
       File::Spec->catfile( $resultsDir, $resultsName . q/.impute.hap/ );

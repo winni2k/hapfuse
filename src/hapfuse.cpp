@@ -447,6 +447,8 @@ void hapfuse::work(string outputFile) {
       fusedVCF << "\n";
     }
 
+    // write out any sites that have previously been loaded,
+    // but are not in the chunk we just loaded
     while (!site.empty() && site.front().pos < chunk[0].pos) {
       site.front().write(fusedVCF);
       site.pop_front();

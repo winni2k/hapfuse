@@ -8,9 +8,12 @@ use File::Path qw(make_path remove_tree);
 unless ( qx/which vcftools/ =~ m/.*vcftools$/ ) {
     plan skip_all => "vcftools does not exist on system";
 }
+else {
+    plan tests => 1;
+}
 
 # this test tests the GP field parsing
-my $testTag    = 'test15';
+my $testTag = 'test15';
 
 my $resultsDir = "results/$testTag";
 make_path($resultsDir);
@@ -27,8 +30,7 @@ system
   "../bin/hapfuse -o $results_vcf ../samples/$testTag/$testTag.chr20*.bin.vcf";
 
 # pull haplotypes out of vcf
-system
-"vcftools --vcf $results_vcf --IMPUTE --out ${resultsDir}/$resultsName";
+system "vcftools --vcf $results_vcf --IMPUTE --out ${resultsDir}/$resultsName";
 
-compare_ok( $expectedHap,    $resultsHap,    "hapfuse phases" );
+compare_ok( $expectedHap, $resultsHap, "hapfuse phases" );
 

@@ -8,9 +8,12 @@ use File::Path qw(make_path remove_tree);
 unless ( qx/which vcftools/ =~ m/.*vcftools$/ ) {
     plan skip_all => "vcftools does not exist on system";
 }
+else {
+    plan tests => 2;
+}
 
 # this test tests the GP field parsing
-my $testTag    = 'test30';
+my $testTag = 'test30';
 
 my $resultsDir = "results/$testTag";
 make_path($resultsDir);

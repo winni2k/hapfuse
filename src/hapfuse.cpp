@@ -134,13 +134,13 @@ private:
   vector<string> name;
   vector<Site> chunk;
   set<string> male;
+  vector<string> currentChunkHead;
 
   void vcf_head(ofile &fusedVCF);
   bool load_chunk(const char *F);
-  void extractAPP(const string &sampleDat, double &pHap1,
-                           double &pHap2);
+  void extractAPP(const string &sampleDat, double &pHap1, double &pHap2);
   void extractGP(const string &sampleDat, string GT, double &pHap1,
-                          double &pHap2);
+                 double &pHap2);
 
 public:
   static void document(void);
@@ -252,6 +252,7 @@ bool hapfuse::load_chunk(const char *F) {
     if (buffer.size() == 0)
       throw myException("Error in chunk file " + chunkFile +
                         ": no #CHROM header");
+    currentChunkHead.push_back(buffer);
   } while (buffer.find("#CHROM") == std::string::npos);
 
   {
@@ -371,7 +372,15 @@ bool hapfuse::load_chunk(const char *F) {
 }
 
 void hapfuse::vcf_head(ofile &fusedVCF) {
-  fusedVCF << "##fileformat=VCFv4.1\n";
+  string fileFormat("##fileformat=VCFv4.1\n");
+  fusedVCF << fileFormat;
+
+  // print the first chunk's header except for its fileformat
+  for (auto chunkHeadLine : currentChunkHead)
+    if ((!chunkHeadLine.compare(0, 9, "##source=")) ||
+        (!chunkHeadLine.compare(0, 21, "##phaseAndImputeCall=")))
+      fusedVCF << chunkHeadLine << "\n";
+
   fusedVCF << "##source=BCM:SNPTools:hapfuseV" << hapfuse_VERSION_MAJOR << "."
            << hapfuse_VERSION_MINOR << "\n";
   fusedVCF
@@ -423,14 +432,15 @@ void hapfuse::work(string outputFile) {
 
   ofile fusedVCF(outputFile);
   fusedVCF << std::fixed << std::setprecision(3);
-  vcf_head(fusedVCF);
   vector<double> sum;
 
   for (uint i = 0; i < file.size(); i++) {
     if (!load_chunk(file[i].c_str()))
       return;
 
+    // load header here, so we can add first chunk's header to header line
     if (!i) {
+      vcf_head(fusedVCF);
       for (uint i = 0; i < in; i++)
         fusedVCF << "\t" << name[i];
 

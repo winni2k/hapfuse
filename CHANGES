@@ -1,3 +1,8 @@
+v0.4    Mon Mar 03 11:42:47 GMT 2014
+        This is essentially v0.1 again with tests, which it passes!
+        Source and phaseAndImpute lines from first chunk's header
+        are now passed through to output VCF.
+
 v0.3    Wed Feb 12 16:08:46 GMT 2014
         Made changes in vcf_parse.hpp such that only VCFs with format
         field of "GT:GP:APP" are accepted

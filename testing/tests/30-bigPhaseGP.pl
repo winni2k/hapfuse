@@ -18,10 +18,10 @@ my $testTag = 'test30';
 my $resultsDir = "results/$testTag";
 make_path($resultsDir);
 my $expectedHap = File::Spec->catfile( qw/ .. samples /, $testTag,
-"$testTag.expected.chr20.consensus.STv1.2.13.C100.K100.20_20059716_20399169.first50Samp.vcf.impute.hap"
+"$testTag.expected.chr20.consensus.STv1.2.13.C100.K100.20_20059716_20399169.first2Samp.vcf.impute.hap"
 );
 my $expectedLegend = File::Spec->catfile( qw/ .. samples /, $testTag,
-"$testTag.expected.chr20.consensus.STv1.2.13.C100.K100.20_20059716_20399169.first50Samp.vcf.impute.legend"
+"$testTag.expected.chr20.consensus.STv1.2.13.C100.K100.20_20059716_20399169.first2Samp.vcf.impute.legend"
 );
 
 my $resultsName = "$testTag.hapfuse";

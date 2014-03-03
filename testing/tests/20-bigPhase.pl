@@ -11,10 +11,11 @@ SKIP: {
     skip "vcftools does not exist on system", 1
       unless qx/which vcftools/ =~ m/.*vcftools$/;
 
-    my $resultsDir = qw|results/test20|;
+    my $resultsDir = File::Spec->catdir(qw|results test20|);
     make_path($resultsDir);
-    my $expected_file =
-      File::Spec->catfile(qw/ .. samples test20 test20.expected.chr20.consensus.STv1.2.13.C100.K100.20_20059716_20399169.first2Samp.secondIndHapSwapped.impute.editedForApp.hap /);
+    my $expected_file = File::Spec->catfile(
+        qw/ .. samples test20 test20.expected.chr20.consensus.STv1.2.13.C100.K100.20_20059716_20399169.first2Samp.secondIndHapSwapped.impute.editedForApp.hap /
+    );
     my $resultsName = "test20.hapfuse";
     my $results_file =
       File::Spec->catfile( $resultsDir, $resultsName . q/.impute.hap/ );
@@ -26,6 +27,7 @@ SKIP: {
     # pull haplotypes out of vcf
     system
       "vcftools --vcf $results_vcf --IMPUTE --out ${resultsDir}/$resultsName";
+
     compare_ok( $expected_file, $results_file, "hapfuse phases" );
 }
 

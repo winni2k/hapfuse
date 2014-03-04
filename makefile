@@ -13,3 +13,5 @@ clean:
 
 oxford:
 	make oxford -C src
+
+.PHONY: all debug test clean oxford

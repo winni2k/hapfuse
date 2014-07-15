@@ -22,6 +22,8 @@
 #include <boost/algorithm/string.hpp>
 #include <cmath>
 #include <cfloat>
+#include <htslib/hts.h>
+#include <htslib/vcf.h>
 
 #include "version.hpp"
 #include "utils.hpp"
@@ -40,7 +42,7 @@ double prob2Phred(double prob) {
     prob = 0;
 
   if (prob == 0)
-    return DBL_MAX_10_EXP * 10;
+    return 999;
   else if (prob >= 1)
     return 2 * DBL_MIN; // 0 comes out negative zero on my system, not cool!
   else
@@ -138,9 +140,7 @@ private:
 
   void vcf_head(ofile &fusedVCF);
   bool load_chunk(const char *F);
-  void extractAPP(const string &sampleDat, double &pHap1, double &pHap2);
-  void extractGP(const string &sampleDat, string GT, double &pHap1,
-                 double &pHap2);
+  std::tuple<float, float> extractGP(float *gp, int &gtA, int &gtB);
 
 public:
   static void document(void);
@@ -168,60 +168,31 @@ bool hapfuse::gender(const char *F) {
   return true;
 }
 
-void hapfuse::extractAPP(const string &sampleDat, double &pHap1,
-                         double &pHap2) {
-
-  vector<string> APPstrings;
-  boost::split(APPstrings, sampleDat, boost::is_any_of(","));
-  assert(APPstrings.size() == 2);
-  int numAPPs = 2;
-  vector<double> APPs;
-  APPs.reserve(numAPPs);
-  for (auto APP : APPstrings)
-    APPs.push_back(strtod(APP.c_str(), NULL));
-
-  // convert APPs to probabilities
-  double sum = 0;
-
-  for (auto &APP : APPs) {
-    APP = phred2Prob(APP);
-    sum += APP;
-  }
-
-  assert(sum < 2 + EPSILON);
-  pHap1 = APPs[0];
-  pHap2 = APPs[1];
-}
-
 // extract the GP fields, convert them to allelic probabilities and store in
 // pHap1,2
-void hapfuse::extractGP(const string &sampleDat, string GT, double &pHap1,
-                        double &pHap2) {
-
-  vector<string> GPstrings;
-  boost::split(GPstrings, sampleDat, boost::is_any_of(","));
-  unsigned numGPs = 3;
-  assert(GPstrings.size() == numGPs);
-  vector<double> GPs;
-  GPs.reserve(numGPs);
-  for (auto GP : GPstrings)
-    GPs.push_back(strtod(GP.c_str(), NULL));
+std::tuple<float, float> hapfuse::extractGP(float *gp, int &gtA, int &gtB) {
 
   // convert GPs to probabilities
+  vector<float> GPs;
+  GPs.reserve(3);
   double sum = 0;
-
-  for (auto &GP : GPs) {
-    GP = phred2Prob(GP);
-    sum += GP;
+  for (int i = 0; i < 3; ++i, ++gp) {
+    GPs[i] = phred2Prob(*gp);
+    sum += GPs[i];
   }
 
-  assert(fabs(sum - 1) < EPSILON);
+  float pHap1 = 0, pHap2 = 0;
+
+  if (fabs(sum - 1) >= EPSILON)
+    throw std::runtime_error("GPs don't sum to 1: " + to_string(GPs[0]) + " " +
+                             to_string(GPs[1]) + " " + to_string(GPs[2]) +
+                             "; sum = " + to_string(sum));
   pHap1 = GPs[2];
   pHap2 = GPs[2];
 
   // swap alleles if evidence exists in GT field
-  if (GT.at(0) != GT.at(2)) {
-    if (GT.at(0) == '1')
+  if (gtA != gtB) {
+    if (gtA == 1)
       pHap1 += GPs[1];
     else
       pHap2 += GPs[1];
@@ -229,51 +200,32 @@ void hapfuse::extractGP(const string &sampleDat, string GT, double &pHap1,
     pHap1 += GPs[1] / 2;
     pHap2 += GPs[1] / 2;
   }
+  return make_tuple(pHap1, pHap2);
 }
 
 bool hapfuse::load_chunk(const char *F) {
 
   // open F and make sure it opened ok
-  string chunkFile(F);
-  ifile chunkFD(F);
-  if (!chunkFD.isGood())
-    throw myException("Could not open file: " + chunkFile);
+  string inFile(F);
+  htsFile *fp = hts_open(inFile.c_str(), "r");
+  bcf_hdr_t *hdr = bcf_hdr_read(fp);
+  bcf1_t *rec = bcf_init1();
 
-  // store each line in buffer
-  string buffer;
+  if (!fp)
+    throw myException("Could not open file: " + inFile);
 
   string temp;
   name.clear();
   chunk.clear();
 
   // skip headers
-  do {
-    getline(chunkFD, buffer, '\n');
-    if (buffer.size() == 0)
-      throw myException("Error in chunk file " + chunkFile +
-                        ": no #CHROM header");
-    currentChunkHead.push_back(buffer);
-  } while (buffer.find("#CHROM") == std::string::npos);
 
-  {
-    istringstream si(buffer);
-
-    for (uint i = 0; i < 9; i++)
-      si >> temp;
-
-    temp = "";
-
-    while (!si.eof()) {
-      si >> temp;
-
-      if (temp != "")
-        name.push_back(temp);
-
-      temp = "";
-    }
-  }
-
+  // parse #CHROM header line
+  name.reserve(bcf_hdr_nsamples(hdr));
+  for (int i = 0; i < bcf_hdr_nsamples(hdr); ++i)
+    name.push_back(hdr->samples[i]);
   in = name.size();
+
   Site::is_male.resize(in);
 
   for (uint i = 0; i < in; i++)
@@ -281,7 +233,10 @@ bool hapfuse::load_chunk(const char *F) {
 
   // parsing each line of data
   unsigned cnt_lines = 0;
-  while (getline(chunkFD, buffer, '\n')) {
+  while (bcf_read1(fp, hdr, rec) >= 0) {
+
+    // get the first five and sample columns
+    bcf_unpack(rec, BCF_UN_STR | BCF_UN_IND);
 
     // s will store the site's information
     Site s;
@@ -293,68 +248,91 @@ bool hapfuse::load_chunk(const char *F) {
 
     // tokenize on "\t"
     // fill in site information (s)
-    vector<string> tokens;
-    boost::split(tokens, buffer, boost::is_any_of("\t"));
-    s.chr = tokens[0];
-    s.pos = strtoul(tokens[1].c_str(), NULL, 0);
-    for (int i = 2; i < 4; ++i)
-      assert(tokens[i].size() == 1);
-    s.all[0] = tokens[3][0];
-    s.all[1] = tokens[4][0];
+    //    vector<string> tokens;
+    //    boost::split(tokens, buffer, boost::is_any_of("\t"));
+    s.chr = bcf_hdr_id2name(hdr, rec->rid);
+    s.pos = (rec->pos + 1);
 
-    vector<string> GTFields;
-    boost::split(GTFields, tokens[8], boost::is_any_of(":"));
-    int GTIdx = -1;
-    int GPIdx = -1;
-    int APPIdx = -1;
+    // make sure site is biallelic
+    assert(rec->n_allele == 2);
+    string a1(rec->d.allele[0]);
+    string a2(rec->d.allele[1]);
 
-    for (unsigned fieldIdx = 0; fieldIdx < GTFields.size(); ++fieldIdx) {
-      if (GTFields[fieldIdx].compare("GT") == 0)
-        GTIdx = fieldIdx;
-      else if (GTFields[fieldIdx].compare("GP") == 0)
-        GPIdx = fieldIdx;
-      else if (GTFields[fieldIdx].compare("APP") == 0)
-        APPIdx = fieldIdx;
-    }
+    // make sure site is snp
+    assert(a1.size() == 1);
+    assert(a2.size() == 1);
+    s.all[0] = a1[0];
+    s.all[1] = a2[0];
 
-    if (!(GTIdx >= 0 && (GPIdx >= 0 || APPIdx >= 0))) {
-      cerr << "expected GT:GP, GT:APP or GT:GP:APP input format in chunk " << F
-           << endl;
-      exit(1);
-    }
+    if (!bcf_get_fmt(hdr, rec, "GT"))
+      throw std::runtime_error("expected GT field in VCF");
+    if (!bcf_get_fmt(hdr, rec, "GP") && !bcf_get_fmt(hdr, rec, "APP"))
+      throw std::runtime_error("expected GP or APP field");
 
     // read sample specific data
-    const unsigned firstSampIdx = 9;
-    for (uint tokenColIdx = firstSampIdx; tokenColIdx < tokens.size();
-         ++tokenColIdx) {
+    // get genotype array
+    int ngt, *gt_arr = NULL, ngt_arr = 0;
+    ngt = bcf_get_genotypes(hdr, rec, &gt_arr, &ngt_arr);
 
-      vector<string> sampDat;
-      boost::split(sampDat, tokens[tokenColIdx], boost::is_any_of(":"));
-      assert(sampDat.size() > 1);
+    if (ngt != 2 * bcf_hdr_nsamples(hdr))
+      throw std::runtime_error("number of genotypes found = " + to_string(ngt) +
+                               "; with values: " + to_string(gt_arr[0]) + " " +
+                               to_string(gt_arr[1]));
+
+    // get APP array
+    int n_arr = 0, m_arr = 0;
+    float *arr = NULL;
+    int stride = 0;
+    if (bcf_get_fmt(hdr, rec, "APP")) {
+      stride = 2;
+      n_arr = bcf_get_format_float(hdr, rec, "APP", &arr, &m_arr);
+      assert(n_arr / stride == bcf_hdr_nsamples(hdr));
+    }
+    // get GP array
+    else if (bcf_get_fmt(hdr, rec, "GP")) {
+      stride = 3;
+      n_arr = bcf_get_format_float(hdr, rec, "GP", &arr, &m_arr);
+    } else {
+      free(arr);
+      throw std::runtime_error("could not read record");
+    }
+
+    // cycle through sample vals
+    for (int i = 0; i < bcf_hdr_nsamples(hdr); ++i) {
+
+      assert(gt_arr[i * 2] != bcf_gt_missing);
+      assert(gt_arr[i * 2] != bcf_int32_vector_end);
+      assert(gt_arr[i * 2 + 1] != bcf_gt_missing);
+      assert(gt_arr[i * 2 + 1] != bcf_int32_vector_end);
+
+      // this assumes the second gt val carries the phase information
+      if (!bcf_gt_is_phased(gt_arr[i * 2 + 1]))
+        throw std::runtime_error("Error in GT data, genotype is not phased.");
+
+      //    for (uint tokenColIdx = firstSampIdx; tokenColIdx < tokens.size();
+      //         ++tokenColIdx) {
 
       // parse haps
-      string GT = sampDat[GTIdx];
 
-      if (GT.at(1) != '|' || GT.size() != 3) {
-        cerr << "Error in GT data, genotype is not phased. Phase found: "
-             << GT.at(1) << endl;
-        exit(1);
-      }
+      int gtA = bcf_gt_allele(gt_arr[i]);
+      int gtB = bcf_gt_allele(gt_arr[i + 1]);
 
       // extract/estimate allelic probabilities
-      double &pHap1 = s.hap[(tokenColIdx - firstSampIdx) * 2];
-      double &pHap2 = s.hap[(tokenColIdx - firstSampIdx) * 2 + 1];
-      if (APPIdx >= 0) {
-        extractAPP(sampDat[APPIdx], pHap1, pHap2);
-      }
 
-      // parse GPs
-      else if (GPIdx >= 0) {
-        extractGP(sampDat[GPIdx], GT, pHap1, pHap2);
-      } else {
-        cerr << "could not load GP or APP field: " << buffer << endl;
-        exit(1);
+      float pHap1;
+      float pHap2;
+      // parse APPs
+      if (bcf_get_fmt(hdr, rec, "APP")) {
+        pHap1 = phred2Prob(arr[i * stride]);
+        pHap2 = phred2Prob(arr[i * stride + 1]);
       }
+      // parse GPs
+      else if (bcf_get_fmt(hdr, rec, "GP")) {
+        std::tie(pHap1, pHap2) = extractGP(&arr[i * stride], gtA, gtB);
+      } else
+        throw std::runtime_error("could not load GP or APP field ");
+
+      assert(pHap1 + pHap2 < 2 + EPSILON);
 
       // make sure pHap1 and 2 are greater than zero
       if (pHap1 < 0)
@@ -362,11 +340,15 @@ bool hapfuse::load_chunk(const char *F) {
 
       if (pHap2 < 0)
         pHap2 = 0;
+
+      s.hap[i * 2] = pHap1;
+      s.hap[i * 2 + 1] = pHap2;
     }
     chunk.push_back(s);
+    free(arr);
+    free(gt_arr);
   }
 
-  chunkFD.close();
   // gzclose(f);
   return true;
 }

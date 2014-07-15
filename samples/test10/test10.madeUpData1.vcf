@@ -1,3 +1,7 @@
+##fileformat=VCFv4.1
+##contig=<ID=20,length=62435964,assembly=B36,md5=f126cdf8a6e0c7f379d618ff66beb2da,species="Homo sapiens",taxonomy=x>
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+##FORMAT=<ID=APP,Number=2,Type=Float,Description="Allelic probabilities">
 #CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	BLARGATHON
 20	1	.	A	T	100	PASS	.	GT:APP	0|1:999,0.458
 20	2	.	A	T	100	PASS	.	GT:APP	0|1:999,0.969

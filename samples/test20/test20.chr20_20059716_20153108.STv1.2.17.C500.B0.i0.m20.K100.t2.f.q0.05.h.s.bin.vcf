@@ -1,4 +1,5 @@
 ##fileformat=VCFv4.0
+##contig=<ID=20,length=62435964,assembly=B36,md5=f126cdf8a6e0c7f379d618ff66beb2da,species="Homo sapiens",taxonomy=x>
 ##source=WTCHG:INSTIv1.2.17
 ##phaseAndImputeCall=insti.1.2.17 -C 500 -B -0 -i 0 -m 20 -K 100 -t 2 -q 0.05 -f -h /homes/kretzsch/feng/marchini/haplotypeConsortium/data/2013-09-25_oliviers_data/WINNI/ALL.chr20.unionAC10NM.founders.B7.R1.P8.M30.K100.W500kb.hap.gz -s /homes/kretzsch/feng/marchini/haplotypeConsortium/data/2013-09-25_oliviers_data/WINNI/ALL.chr20.unionAC10NM.founders.B7.R1.P8.M30.K100.W500kb.hap.sample /data/fenghuang/not-backed-up/kretzsch/proj/marchini/haplotypeConsortium/results/chr20_select_regions/2014-02-12_ST_imputation_with_scaffold_optimization/refPanels/STv1.2.17.C500.B0.i0.m20.K100.t2.f.q0.05.h.s/20_20000000_22000000/gprobs/chr20/STv1.2.17.C500.B0.i0.m20.K100.t2.f.q0.05.h.s/chr20_20000120_20153108.STv1.2.17.C500.B0.i0.m20.K100.t2.f.q0.05.h.s.bin
 ##iteration=%u

@@ -131,7 +131,6 @@ class hapfuse {
 private:
   list<Site> site;
   uint32_t in;
-  FILE *vcf;
   vector<string> file;
   vector<string> name;
   vector<Site> chunk;
@@ -142,12 +141,18 @@ private:
   bool load_chunk(const char *F);
   std::tuple<float, float> extractGP(float *gp, int &gtA, int &gtB);
 
+  htsFile *m_out = NULL;
+  bcf_hdr_t *m_hdr_out = NULL;
+
 public:
   static void document(void);
   bool gender(const char *F);
   bool load_dir(const char *D);
   bool load_files(const vector<string> &inFiles);
   void work(string outputFile);
+
+  // destroy output header
+  ~hapfuse() { bcf_hdr_destroy(m_hdr_out); }
 };
 
 bool hapfuse::gender(const char *F) {
@@ -177,7 +182,7 @@ std::tuple<float, float> hapfuse::extractGP(float *gp, int &gtA, int &gtB) {
   GPs.reserve(3);
   double sum = 0;
   for (int i = 0; i < 3; ++i, ++gp) {
-    GPs[i] = phred2Prob(*gp);
+    GPs.push_back(phred2Prob(*gp));
     sum += GPs[i];
   }
 
@@ -192,7 +197,7 @@ std::tuple<float, float> hapfuse::extractGP(float *gp, int &gtA, int &gtB) {
 
   // swap alleles if evidence exists in GT field
   if (gtA != gtB) {
-    if (gtA == 1)
+    if (gtB == 0)
       pHap1 += GPs[1];
     else
       pHap2 += GPs[1];
@@ -208,11 +213,15 @@ bool hapfuse::load_chunk(const char *F) {
   // open F and make sure it opened ok
   string inFile(F);
   htsFile *fp = hts_open(inFile.c_str(), "r");
+  if (!fp)
+    throw myException("Could not open file: " + inFile);
+
   bcf_hdr_t *hdr = bcf_hdr_read(fp);
   bcf1_t *rec = bcf_init1();
 
-  if (!fp)
-    throw myException("Could not open file: " + inFile);
+  // save first header as template for output file
+  if (!m_hdr_out)
+    m_hdr_out = bcf_hdr_dup(hdr);
 
   string temp;
   name.clear();
@@ -298,15 +307,15 @@ bool hapfuse::load_chunk(const char *F) {
     }
 
     // cycle through sample vals
-    for (int i = 0; i < bcf_hdr_nsamples(hdr); ++i) {
+    for (int sampNum = 0; sampNum < bcf_hdr_nsamples(hdr); ++sampNum) {
 
-      assert(gt_arr[i * 2] != bcf_gt_missing);
-      assert(gt_arr[i * 2] != bcf_int32_vector_end);
-      assert(gt_arr[i * 2 + 1] != bcf_gt_missing);
-      assert(gt_arr[i * 2 + 1] != bcf_int32_vector_end);
+      assert(gt_arr[sampNum * 2] != bcf_gt_missing);
+      assert(gt_arr[sampNum * 2] != bcf_int32_vector_end);
+      assert(gt_arr[sampNum * 2 + 1] != bcf_gt_missing);
+      assert(gt_arr[sampNum * 2 + 1] != bcf_int32_vector_end);
 
       // this assumes the second gt val carries the phase information
-      if (!bcf_gt_is_phased(gt_arr[i * 2 + 1]))
+      if (!bcf_gt_is_phased(gt_arr[sampNum * 2 + 1]))
         throw std::runtime_error("Error in GT data, genotype is not phased.");
 
       //    for (uint tokenColIdx = firstSampIdx; tokenColIdx < tokens.size();
@@ -314,8 +323,8 @@ bool hapfuse::load_chunk(const char *F) {
 
       // parse haps
 
-      int gtA = bcf_gt_allele(gt_arr[i]);
-      int gtB = bcf_gt_allele(gt_arr[i + 1]);
+      int gtA = bcf_gt_allele(gt_arr[sampNum * 2]);
+      int gtB = bcf_gt_allele(gt_arr[sampNum * 2 + 1]);
 
       // extract/estimate allelic probabilities
 
@@ -323,12 +332,12 @@ bool hapfuse::load_chunk(const char *F) {
       float pHap2;
       // parse APPs
       if (bcf_get_fmt(hdr, rec, "APP")) {
-        pHap1 = phred2Prob(arr[i * stride]);
-        pHap2 = phred2Prob(arr[i * stride + 1]);
+        pHap1 = phred2Prob(arr[sampNum * stride]);
+        pHap2 = phred2Prob(arr[sampNum * stride + 1]);
       }
       // parse GPs
       else if (bcf_get_fmt(hdr, rec, "GP")) {
-        std::tie(pHap1, pHap2) = extractGP(&arr[i * stride], gtA, gtB);
+        std::tie(pHap1, pHap2) = extractGP(&arr[sampNum * stride], gtA, gtB);
       } else
         throw std::runtime_error("could not load GP or APP field ");
 
@@ -341,15 +350,18 @@ bool hapfuse::load_chunk(const char *F) {
       if (pHap2 < 0)
         pHap2 = 0;
 
-      s.hap[i * 2] = pHap1;
-      s.hap[i * 2 + 1] = pHap2;
+      s.hap[sampNum * 2] = pHap1;
+      s.hap[sampNum * 2 + 1] = pHap2;
     }
     chunk.push_back(s);
     free(arr);
     free(gt_arr);
   }
 
-  // gzclose(f);
+  bcf_destroy1(rec);
+  bcf_hdr_destroy(hdr);
+  hts_close(fp);
+
   return true;
 }
 

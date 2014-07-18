@@ -64,7 +64,7 @@ struct Site {
   string chr;
   uint32_t pos;
   uint16_t cov;
-  char all[2];
+  vector<string> all;
 
   static bool is_x;
   static vector<bool> is_male;
@@ -76,6 +76,7 @@ bool Site::is_x;
 vector<bool> Site::is_male;
 
 void Site::write(ofile &fusedVCF) {
+
   fusedVCF << chr.c_str() << "\t" << pos << "\t.\t" << all[0] << "\t" << all[1]
            << "\t100\tPASS\t.\tGT:GP:APP";
   uint in = hap.size() / 2;
@@ -137,23 +138,44 @@ private:
   set<string> male;
   vector<string> currentChunkHead;
 
-  void vcf_head(ofile &fusedVCF);
+  void write_vcf_head();
   bool load_chunk(const char *F);
   std::tuple<float, float> extractGP(float *gp, int &gtA, int &gtB);
 
-  htsFile *m_out = NULL;
+  htsFile *m_fusedVCF = NULL;
   bcf_hdr_t *m_hdr_out = NULL;
+  void write_site(const Site &osite) const;
 
 public:
   static void document(void);
   bool gender(const char *F);
   bool load_dir(const char *D);
   bool load_files(const vector<string> &inFiles);
-  void work(string outputFile);
+  void work();
 
-  // destroy output header
-  ~hapfuse() { bcf_hdr_destroy(m_hdr_out); }
+  // destroy output header and output file descriptor
+  hapfuse(const string &outputFile, const string &mode);
+  ~hapfuse() {
+    bcf_hdr_destroy(m_hdr_out);
+    hts_close(m_fusedVCF);
+  }
 };
+
+hapfuse::hapfuse(const string &outputFile, const string &mode) {
+
+  // open output file for writing
+  assert(!m_fusedVCF);
+  if (outputFile.size() == 0)
+    throw runtime_error("Please specify an output file");
+
+  size_t found = mode.find_first_of("buzv");
+  if (mode.size() > 0 && (mode.size() != 1 || found == string::npos))
+    throw runtime_error("-O needs to be 'b' for compressed bcf, 'u' for "
+                        "uncompressed bcf, 'z' for compressed vcf or 'v' for "
+                        "uncompressed vcf");
+  string cmode = "w" + mode;
+  m_fusedVCF = hts_open(outputFile.c_str(), cmode.c_str());
+}
 
 bool hapfuse::gender(const char *F) {
   ifstream fi(F);
@@ -220,8 +242,10 @@ bool hapfuse::load_chunk(const char *F) {
   bcf1_t *rec = bcf_init1();
 
   // save first header as template for output file
-  if (!m_hdr_out)
+  if (!m_hdr_out) {
     m_hdr_out = bcf_hdr_dup(hdr);
+    write_vcf_head();
+  }
 
   string temp;
   name.clear();
@@ -268,10 +292,8 @@ bool hapfuse::load_chunk(const char *F) {
     string a2(rec->d.allele[1]);
 
     // make sure site is snp
-    assert(a1.size() == 1);
-    assert(a2.size() == 1);
-    s.all[0] = a1[0];
-    s.all[1] = a2[0];
+    s.all.push_back(a1);
+    s.all.push_back(a2);
 
     if (!bcf_get_fmt(hdr, rec, "GT"))
       throw std::runtime_error("expected GT field in VCF");
@@ -365,26 +387,114 @@ bool hapfuse::load_chunk(const char *F) {
   return true;
 }
 
-void hapfuse::vcf_head(ofile &fusedVCF) {
-  string fileFormat("##fileformat=VCFv4.1\n");
-  fusedVCF << fileFormat;
+void hapfuse::write_vcf_head() {
 
-  // print the first chunk's header except for its fileformat
-  for (auto chunkHeadLine : currentChunkHead)
-    if ((!chunkHeadLine.compare(0, 9, "##source=")) ||
-        (!chunkHeadLine.compare(0, 21, "##phaseAndImputeCall=")))
-      fusedVCF << chunkHeadLine << "\n";
+  assert(m_hdr_out);
+  assert(m_fusedVCF);
 
-  fusedVCF << "##source=BCM:SNPTools:hapfuseV" << hapfuse_VERSION_MAJOR << "."
-           << hapfuse_VERSION_MINOR << "\n";
-  fusedVCF
-      << "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">\n";
-  fusedVCF << "##FORMAT=<ID=GP,Number=3,Type=Float,Description=\"Phred-scaled "
-              "genotype posterior probabilities\">\n";
+  if (bcf_hdr_append(m_hdr_out,
+                      "##FORMAT=<ID=APP,Number=2,Type=Float,Description="
+                      "\"Phred-scaled allelic probability, "
+                      "P(Allele=1|Haplotype)\">"))
+    throw runtime_error("Could not append VCF APP format header");
 
-  fusedVCF << "##FORMAT=<ID=APP,Number=2,Type=Float,Description=\"Phred-"
-           << "scaled allelic probability, P(Allele=1|Haplotype)\">\n";
-  fusedVCF << "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT";
+  if (bcf_hdr_append(
+          m_hdr_out,
+          "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">"))
+    throw runtime_error("could not append VCF GP format header");
+
+  if (bcf_hdr_append(
+          m_hdr_out,
+          "##FORMAT=<ID=GP,Number=3,Type=Float,Description=\"Phred-scaled "
+          "genotype posterior probabilities\">"))
+    throw runtime_error("could not append VCF GP format header");
+
+  ostringstream version;
+  version << "##source=UoO:SNPTools:hapfuseV" << hapfuse_VERSION_MAJOR << "."
+          << hapfuse_VERSION_MINOR;
+  if (bcf_hdr_append(m_hdr_out, version.str().c_str()))
+    throw runtime_error("could not append hapfuse header");
+
+  bcf_hdr_write(m_fusedVCF, m_hdr_out);
+}
+
+void hapfuse::write_site(const Site &osite) const {
+
+  assert(m_hdr_out);
+  assert(m_fusedVCF);
+  // fill empty record with data and then print
+  bcf1_t *rec = bcf_init1();
+  string alleles;
+  for (auto a : osite.all)
+    alleles += a + ",";
+  alleles.pop_back();
+  bcf_update_alleles_str(m_hdr_out, rec, alleles.c_str());
+  rec->pos = osite.pos - 1;
+  rec->rid = bcf_hdr_name2id(m_hdr_out, osite.chr.c_str());
+
+  uint in = osite.hap.size() / 2;
+  double k = 1.0 / osite.cov;
+  bool is_par = (osite.pos >= 60001 && osite.pos <= 2699520) ||
+                (osite.pos >= 154931044 && osite.pos <= 155270560);
+
+  vector<unsigned> gts;
+  vector<float> lineGPs;
+  vector<float> lineAPPs;
+
+  for (uint i = 0; i < in; i++) {
+    uint a, b;
+    double p0 = osite.hap[i * 2] * k, p1 = osite.hap[i * 2 + 1] * k;
+    double prr = (1 - p0) * (1 - p1), pra = (1 - p0) * p1 + p0 * (1 - p1),
+           paa = p0 * p1;
+
+    if (osite.is_x && osite.is_male[i] && !is_par) {
+      if (prr >= paa)
+        a = b = 0;
+      else
+        a = b = 1;
+    } else {
+      if (prr >= pra && prr >= paa)
+        a = b = 0;
+      else if (pra >= prr && pra >= paa) {
+        if (p0 > p1) {
+          a = 1;
+          b = 0;
+        } else {
+          a = 0;
+          b = 1;
+        }
+      } else
+        a = b = 1;
+    }
+
+    vector<double> GPs(3);
+    GPs[0] = (1 - p0) * (1 - p1);
+    GPs[1] = (1 - p0) * p1 + p0 * (1 - p1);
+    GPs[2] = p0 * p1;
+
+    for (auto &GP : GPs)
+      GP = prob2Phred(GP);
+
+    p0 = prob2Phred(p0);
+    p1 = prob2Phred(p1);
+
+    gts.push_back(bcf_gt_phased(a));
+    gts.push_back(bcf_gt_phased(b));
+    for (auto g : GPs)
+      lineGPs.push_back(g);
+    lineAPPs.push_back(p0);
+    lineAPPs.push_back(p1);
+    //    fusedVCF << "\t" << a << "|" << b << ":" << GPs[0] << "," << GPs[1] <<
+    // ","
+    //           << GPs[2] << ":" << p0 << "," << p1;
+  }
+  bcf_update_genotypes(m_hdr_out, rec, gts.data(), gts.size());
+  bcf_update_format_float(m_hdr_out, rec, "GP", lineGPs.data(), lineGPs.size());
+  bcf_update_format_float(m_hdr_out, rec, "APP", lineAPPs.data(),
+                          lineAPPs.size());
+
+  bcf_write(m_fusedVCF, m_hdr_out, rec);
+  bcf_destroy1(rec);
 }
 
 bool hapfuse::load_dir(const char *D) {
@@ -422,29 +532,18 @@ bool hapfuse::load_files(const vector<string> &inFiles) {
   return true;
 }
 
-void hapfuse::work(string outputFile) {
+void hapfuse::work() {
 
-  ofile fusedVCF(outputFile);
-  fusedVCF << std::fixed << std::setprecision(3);
   vector<double> sum;
 
   for (uint i = 0; i < file.size(); i++) {
     if (!load_chunk(file[i].c_str()))
       return;
 
-    // load header here, so we can add first chunk's header to header line
-    if (!i) {
-      vcf_head(fusedVCF);
-      for (uint i = 0; i < in; i++)
-        fusedVCF << "\t" << name[i];
-
-      fusedVCF << "\n";
-    }
-
     // write out any sites that have previously been loaded,
     // but are not in the chunk we just loaded
     while (!site.empty() && site.front().pos < chunk[0].pos) {
-      site.front().write(fusedVCF);
+      write_site(site.front());
       site.pop_front();
     }
 
@@ -494,9 +593,7 @@ void hapfuse::work(string outputFile) {
   }
 
   for (list<Site>::iterator li = site.begin(); li != site.end(); li++)
-    li->write(fusedVCF);
-
-  fusedVCF.close();
+    write_site(*li);
 }
 
 void hapfuse::document(void) {
@@ -524,8 +621,9 @@ int main(int argc, char **argv) {
   string genderFile;
   string inFileDir;
   int opt;
+  string mode = ""; // default is compressed bcf
 
-  while ((opt = getopt(argc, argv, "d:g:o:")) >= 0) {
+  while ((opt = getopt(argc, argv, "d:g:o:O:")) >= 0) {
     switch (opt) {
     case 'g':
       Site::is_x = true;
@@ -534,6 +632,10 @@ int main(int argc, char **argv) {
 
     case 'o':
       outFile = optarg;
+      break;
+
+    case 'O':
+      mode = optarg;
       break;
 
     case 'd':
@@ -548,7 +650,7 @@ int main(int argc, char **argv) {
   for (int index = optind; index < argc; index++)
     inFiles.push_back(argv[index]);
 
-  hapfuse hf;
+  hapfuse hf(outFile, mode);
 
   if (Site::is_x)
     hf.gender(genderFile.c_str());
@@ -562,6 +664,6 @@ int main(int argc, char **argv) {
     hf.document();
   }
 
-  hf.work(outFile);
+  hf.work();
   return 0;
 }

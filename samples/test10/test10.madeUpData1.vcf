@@ -3,7 +3,7 @@
 ##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
 ##FORMAT=<ID=APP,Number=2,Type=Float,Description="Allelic probabilities">
 #CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	BLARGATHON
-20	1	.	A	T	100	PASS	.	GT:APP	0|1:999,0.458
-20	2	.	A	T	100	PASS	.	GT:APP	0|1:999,0.969
-20	3	.	A	T	100	PASS	.	GT:APP	0|1:999,1.549
-20	4	.	A	T	100	PASS	.	GT:APP	0|1:999,2.218
+20	1	.	A	T	0	.	.	GT:APP	0|1:999,0.458
+20	2	.	A	T	0	.	.	GT:APP	0|1:999,0.969
+20	3	.	A	T	0	.	.	GT:APP	0|1:999,1.549
+20	4	.	A	T	0	.	.	GT:APP	0|1:999,2.218

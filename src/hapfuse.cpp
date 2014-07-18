@@ -24,6 +24,8 @@
 #include <cfloat>
 #include <htslib/hts.h>
 #include <htslib/vcf.h>
+#include <future>
+//#include <omp.h>
 
 #include "version.hpp"
 #include "utils.hpp"
@@ -66,102 +68,47 @@ struct Site {
   uint16_t cov;
   vector<string> all;
 
-  static bool is_x;
-  static vector<bool> is_male;
-
   void write(ofile &fusedVCF);
 };
-
-bool Site::is_x;
-vector<bool> Site::is_male;
-
-void Site::write(ofile &fusedVCF) {
-
-  fusedVCF << chr.c_str() << "\t" << pos << "\t.\t" << all[0] << "\t" << all[1]
-           << "\t100\tPASS\t.\tGT:GP:APP";
-  uint in = hap.size() / 2;
-  double k = 1.0 / cov;
-  bool is_par = (pos >= 60001 && pos <= 2699520) ||
-                (pos >= 154931044 && pos <= 155270560);
-
-  for (uint i = 0; i < in; i++) {
-    uint a, b;
-    double p0 = hap[i * 2] * k, p1 = hap[i * 2 + 1] * k;
-    double prr = (1 - p0) * (1 - p1), pra = (1 - p0) * p1 + p0 * (1 - p1),
-           paa = p0 * p1;
-
-    if (is_x && is_male[i] && !is_par) {
-      if (prr >= paa)
-        a = b = 0;
-      else
-        a = b = 1;
-    } else {
-      if (prr >= pra && prr >= paa)
-        a = b = 0;
-      else if (pra >= prr && pra >= paa) {
-        if (p0 > p1) {
-          a = 1;
-          b = 0;
-        } else {
-          a = 0;
-          b = 1;
-        }
-      } else
-        a = b = 1;
-    }
-
-    vector<double> GPs(3);
-    GPs[0] = (1 - p0) * (1 - p1);
-    GPs[1] = (1 - p0) * p1 + p0 * (1 - p1);
-    GPs[2] = p0 * p1;
-
-    for (auto &GP : GPs)
-      GP = prob2Phred(GP);
-
-    p0 = prob2Phred(p0);
-    p1 = prob2Phred(p1);
-
-    fusedVCF << "\t" << a << "|" << b << ":" << GPs[0] << "," << GPs[1] << ","
-             << GPs[2] << ":" << p0 << "," << p1;
-  }
-
-  fusedVCF << "\n";
-}
 
 class hapfuse {
 private:
   list<Site> site;
-  uint32_t in;
   vector<string> file;
-  vector<string> name;
-  vector<Site> chunk;
   set<string> male;
-  vector<string> currentChunkHead;
+  bool m_is_x;
+  vector<string> m_names;
 
   void write_vcf_head();
-  bool load_chunk(const char *F);
+  vector<Site> load_chunk(const char *F, bool first);
   std::tuple<float, float> extractGP(float *gp, int &gtA, int &gtB);
 
   htsFile *m_fusedVCF = NULL;
   bcf_hdr_t *m_hdr_out = NULL;
   void write_site(const Site &osite) const;
+  void write_sites(const list<Site> &outSites) {
+    for (auto s : outSites)
+      write_site(s);
+  }
 
 public:
   static void document(void);
+  bool is_x() { return m_is_x; }
   bool gender(const char *F);
   bool load_dir(const char *D);
   bool load_files(const vector<string> &inFiles);
   void work();
 
   // destroy output header and output file descriptor
-  hapfuse(const string &outputFile, const string &mode);
+  hapfuse(const string &outputFile, const string &mode, bool is_x);
   ~hapfuse() {
     bcf_hdr_destroy(m_hdr_out);
     hts_close(m_fusedVCF);
   }
 };
 
-hapfuse::hapfuse(const string &outputFile, const string &mode) {
+hapfuse::hapfuse(const string &outputFile, const string &mode, bool is_x)
+    : m_is_x(is_x) {
 
   // open output file for writing
   assert(!m_fusedVCF);
@@ -230,7 +177,7 @@ std::tuple<float, float> hapfuse::extractGP(float *gp, int &gtA, int &gtB) {
   return make_tuple(pHap1, pHap2);
 }
 
-bool hapfuse::load_chunk(const char *F) {
+vector<Site> hapfuse::load_chunk(const char *F, bool first) {
 
   // open F and make sure it opened ok
   string inFile(F);
@@ -242,27 +189,30 @@ bool hapfuse::load_chunk(const char *F) {
   bcf1_t *rec = bcf_init1();
 
   // save first header as template for output file
-  if (!m_hdr_out) {
+  if (first) {
+    assert(!m_hdr_out);
     m_hdr_out = bcf_hdr_dup(hdr);
     write_vcf_head();
   }
 
   string temp;
-  name.clear();
-  chunk.clear();
+  vector<string> name;
+  vector<Site> chunk;
 
   // skip headers
 
   // parse #CHROM header line
-  name.reserve(bcf_hdr_nsamples(hdr));
-  for (int i = 0; i < bcf_hdr_nsamples(hdr); ++i)
-    name.push_back(hdr->samples[i]);
-  in = name.size();
-
-  Site::is_male.resize(in);
-
-  for (uint i = 0; i < in; i++)
-    Site::is_male[i] = (male.find(name[i]) != male.end());
+  if (bcf_hdr_nsamples(hdr) != static_cast<int>(m_names.size()))
+    throw runtime_error("Unequal number of samples in vcf files: " +
+                        to_string(bcf_hdr_nsamples(hdr)) + " != " +
+                        to_string(m_names.size()));
+  for (size_t i = 0; i < m_names.size(); ++i) {
+    string name(hdr->samples[i]);
+    if (name != m_names[i])
+      throw runtime_error("Sample names do not match: " + name + " != " +
+                          m_names[i]);
+  }
+  unsigned in = m_names.size();
 
   // parsing each line of data
   unsigned cnt_lines = 0;
@@ -384,7 +334,7 @@ bool hapfuse::load_chunk(const char *F) {
   bcf_hdr_destroy(hdr);
   hts_close(fp);
 
-  return true;
+  return chunk;
 }
 
 void hapfuse::write_vcf_head() {
@@ -393,9 +343,9 @@ void hapfuse::write_vcf_head() {
   assert(m_fusedVCF);
 
   if (bcf_hdr_append(m_hdr_out,
-                      "##FORMAT=<ID=APP,Number=2,Type=Float,Description="
-                      "\"Phred-scaled allelic probability, "
-                      "P(Allele=1|Haplotype)\">"))
+                     "##FORMAT=<ID=APP,Number=2,Type=Float,Description="
+                     "\"Phred-scaled allelic probability, "
+                     "P(Allele=1|Haplotype)\">"))
     throw runtime_error("Could not append VCF APP format header");
 
   if (bcf_hdr_append(
@@ -416,6 +366,12 @@ void hapfuse::write_vcf_head() {
     throw runtime_error("could not append hapfuse header");
 
   bcf_hdr_write(m_fusedVCF, m_hdr_out);
+
+  // save names to internal string vector
+  assert(m_names.size() == 0);
+  m_names.reserve(bcf_hdr_nsamples(m_hdr_out));
+  for (int i = 0; i < bcf_hdr_nsamples(m_hdr_out); ++i)
+    m_names.push_back(m_hdr_out->samples[i]);
 }
 
 void hapfuse::write_site(const Site &osite) const {
@@ -447,7 +403,7 @@ void hapfuse::write_site(const Site &osite) const {
     double prr = (1 - p0) * (1 - p1), pra = (1 - p0) * p1 + p0 * (1 - p1),
            paa = p0 * p1;
 
-    if (osite.is_x && osite.is_male[i] && !is_par) {
+    if (m_is_x && (male.find(m_names[i]) != male.end()) && !is_par) {
       if (prr >= paa)
         a = b = 0;
       else
@@ -535,17 +491,40 @@ bool hapfuse::load_files(const vector<string> &inFiles) {
 void hapfuse::work() {
 
   vector<double> sum;
-
+  list<Site> outputSites;
+  std::future<void> outputFut;
+  vector<std::future<vector<Site> > > chunkFutures;
   for (uint i = 0; i < file.size(); i++) {
-    if (!load_chunk(file[i].c_str()))
-      return;
+
+    // add chunks to the future vector
+    // make sure the first chunk is loaded synchronously so that m_name can be
+    // filled and the header can be written without hiccups
+    if (i == 0)
+      chunkFutures.push_back(std::async(launch::async, &hapfuse::load_chunk,
+                                        this, file[i].c_str(), i == 0));
+    // load up a few chunks in parallel
+    // make sure not to go off the end...
+    else if (i == 1)
+      for (unsigned j = 0; j != 2 && j + i < file.size(); ++j)
+        chunkFutures.push_back(std::async(launch::async, &hapfuse::load_chunk,
+                                          this, file[i + j].c_str(), false));
+    else if (i + 1 < file.size())
+      chunkFutures.push_back(std::async(launch::async, &hapfuse::load_chunk,
+                                        this, file[i + 1].c_str(), false));
+
+    vector<Site> chunk = std::move(chunkFutures[i].get());
+    unsigned in = m_names.size();
 
     // write out any sites that have previously been loaded,
     // but are not in the chunk we just loaded
+    if (i != 0)
+      outputFut.get();
+    outputSites.clear();
     while (!site.empty() && site.front().pos < chunk[0].pos) {
-      write_site(site.front());
-      site.pop_front();
+      outputSites.splice(outputSites.end(), site, site.begin());
     }
+    outputFut =
+        std::async(launch::async, &hapfuse::write_sites, this, outputSites);
 
     // find the correct phase
     sum.assign(in * 2, 0);
@@ -555,6 +534,7 @@ void hapfuse::work() {
         if (li->pos == chunk[m].pos) {
           double *p = &(li->hap[0]), *q = &(chunk[m].hap[0]);
 
+//#pragma omp parallel for
           for (uint j = 0; j < in; j++) {
             sum[j * 2] += p[j * 2] * q[j * 2] + p[j * 2 + 1] * q[j * 2 + 1];
             sum[j * 2 + 1] += p[j * 2] * q[j * 2 + 1] + p[j * 2 + 1] * q[j * 2];
@@ -592,6 +572,7 @@ void hapfuse::work() {
     cout << file[i] << endl;
   }
 
+  outputFut.get();
   for (list<Site>::iterator li = site.begin(); li != site.end(); li++)
     write_site(*li);
 }
@@ -622,11 +603,13 @@ int main(int argc, char **argv) {
   string inFileDir;
   int opt;
   string mode = ""; // default is compressed bcf
+  bool is_x = false;
+//  size_t numThreads = 1;
 
   while ((opt = getopt(argc, argv, "d:g:o:O:")) >= 0) {
     switch (opt) {
     case 'g':
-      Site::is_x = true;
+      is_x = true;
       genderFile = optarg;
       break;
 
@@ -641,8 +624,11 @@ int main(int argc, char **argv) {
     case 'd':
       inFileDir = optarg;
       break;
+    default:
+      throw runtime_error("unexpected option: " + std::string(optarg));
     }
   }
+//  omp_set_num_threads(numThreads);
 
   // processing vcf files
   vector<string> inFiles;
@@ -650,9 +636,9 @@ int main(int argc, char **argv) {
   for (int index = optind; index < argc; index++)
     inFiles.push_back(argv[index]);
 
-  hapfuse hf(outFile, mode);
+  hapfuse hf(outFile, mode, is_x);
 
-  if (Site::is_x)
+  if (hf.is_x())
     hf.gender(genderFile.c_str());
 
   if (!inFileDir.empty())

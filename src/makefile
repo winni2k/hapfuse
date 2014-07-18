@@ -1,7 +1,7 @@
 export CXX= g++-4.7+
 
 debug: DEBUGFLAGS= -ggdb
-debug: CXXFLAGS+= -O0
+debug: CXXFLAGS+= -O3
 all: CXXFLAGS+= -O3
 
 VERSION := $(shell grep VERSION_MAJOR version.hpp | cut -f3 -d' ').$(shell grep VERSION_MINOR version.hpp | cut -f3 -d' ')
@@ -12,7 +12,7 @@ BIN=../bin
 
 export CXXFLAGS= -Wall -Wextra -std=c++11 -std=gnu++11 $(DEBUGFLAGS)
 BOOSTLIB = -lboost_iostreams-mt #alternatively: /opt/boost/boost-1.54.0-intel/lib/libboost_iostreams.a
-export LIBS += -lgsl -lgslcblas -lbz2 $(BOOSTLIB) -lm -lstdc++ -lz -lhts
+export LIBS += -lgsl -lgslcblas -lbz2 $(BOOSTLIB) -lm -lstdc++ -lz -lhts -fopenmp
 
 # path variables
 #export CPATH += 

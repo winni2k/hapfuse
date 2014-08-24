@@ -1,3 +1,10 @@
+v0.7    Sun Aug 24 16:57:16 BST 2014
+        Added exception safety to raw pointers
+
+v0.6   
+        moved to using htslib for VCF reading
+        also using multithreading to concurrently read and write vcfs        
+
 v0.4    Mon Mar 03 11:42:47 GMT 2014
         This is essentially v0.1 again with tests, which it passes!
         Source and phaseAndImpute lines from first chunk's header

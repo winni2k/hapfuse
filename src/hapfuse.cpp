@@ -25,7 +25,7 @@
 #include <htslib/hts.h>
 #include <htslib/vcf.h>
 #include <future>
-//#include <omp.h>
+#include <memory>
 
 #include "version.hpp"
 #include "utils.hpp"
@@ -181,17 +181,24 @@ vector<Site> hapfuse::load_chunk(const char *F, bool first) {
 
   // open F and make sure it opened ok
   string inFile(F);
-  htsFile *fp = hts_open(inFile.c_str(), "r");
+  //  auto del = [](htsFile *f) { hts_close(f); };
+  //  std::unique_ptr<htsFile, decltype(del)> fp(hts_open(inFile.c_str(), "r"),
+  //                                             del);
+  std::unique_ptr<htsFile, void (*)(htsFile *)> fp(
+      hts_open(inFile.c_str(), "r"), [](htsFile *f) { hts_close(f); });
   if (!fp)
     throw myException("Could not open file: " + inFile);
 
-  bcf_hdr_t *hdr = bcf_hdr_read(fp);
-  bcf1_t *rec = bcf_init1();
+  std::unique_ptr<bcf_hdr_t, void (*)(bcf_hdr_t *)> hdr(
+      bcf_hdr_read(fp.get()), [](bcf_hdr_t *h) { bcf_hdr_destroy(h); });
+
+  std::unique_ptr<bcf1_t, void (*)(bcf1_t *)> rec(
+      bcf_init1(), [](bcf1_t *b) { bcf_destroy1(b); });
 
   // save first header as template for output file
   if (first) {
     assert(!m_hdr_out);
-    m_hdr_out = bcf_hdr_dup(hdr);
+    m_hdr_out = bcf_hdr_dup(hdr.get());
     write_vcf_head();
   }
 
@@ -202,9 +209,9 @@ vector<Site> hapfuse::load_chunk(const char *F, bool first) {
   // skip headers
 
   // parse #CHROM header line
-  if (bcf_hdr_nsamples(hdr) != static_cast<int>(m_names.size()))
+  if (bcf_hdr_nsamples(hdr.get()) != static_cast<int>(m_names.size()))
     throw runtime_error("Unequal number of samples in vcf files: " +
-                        to_string(bcf_hdr_nsamples(hdr)) + " != " +
+                        to_string(bcf_hdr_nsamples(hdr.get())) + " != " +
                         to_string(m_names.size()));
   for (size_t i = 0; i < m_names.size(); ++i) {
     string name(hdr->samples[i]);
@@ -216,10 +223,10 @@ vector<Site> hapfuse::load_chunk(const char *F, bool first) {
 
   // parsing each line of data
   unsigned cnt_lines = 0;
-  while (bcf_read1(fp, hdr, rec) >= 0) {
+  while (bcf_read1(fp.get(), hdr.get(), rec.get()) >= 0) {
 
     // get the first five and sample columns
-    bcf_unpack(rec, BCF_UN_STR | BCF_UN_IND);
+    bcf_unpack(rec.get(), BCF_UN_STR | BCF_UN_IND);
 
     // s will store the site's information
     Site s;
@@ -233,7 +240,7 @@ vector<Site> hapfuse::load_chunk(const char *F, bool first) {
     // fill in site information (s)
     //    vector<string> tokens;
     //    boost::split(tokens, buffer, boost::is_any_of("\t"));
-    s.chr = bcf_hdr_id2name(hdr, rec->rid);
+    s.chr = bcf_hdr_id2name(hdr.get(), rec->rid);
     s.pos = (rec->pos + 1);
 
     // make sure site is biallelic
@@ -245,17 +252,18 @@ vector<Site> hapfuse::load_chunk(const char *F, bool first) {
     s.all.push_back(a1);
     s.all.push_back(a2);
 
-    if (!bcf_get_fmt(hdr, rec, "GT"))
+    if (!bcf_get_fmt(hdr.get(), rec.get(), "GT"))
       throw std::runtime_error("expected GT field in VCF");
-    if (!bcf_get_fmt(hdr, rec, "GP") && !bcf_get_fmt(hdr, rec, "APP"))
+    if (!bcf_get_fmt(hdr.get(), rec.get(), "GP") &&
+        !bcf_get_fmt(hdr.get(), rec.get(), "APP"))
       throw std::runtime_error("expected GP or APP field");
 
     // read sample specific data
     // get genotype array
     int ngt, *gt_arr = NULL, ngt_arr = 0;
-    ngt = bcf_get_genotypes(hdr, rec, &gt_arr, &ngt_arr);
+    ngt = bcf_get_genotypes(hdr.get(), rec.get(), &gt_arr, &ngt_arr);
 
-    if (ngt != 2 * bcf_hdr_nsamples(hdr))
+    if (ngt != 2 * bcf_hdr_nsamples(hdr.get()))
       throw std::runtime_error("number of genotypes found = " + to_string(ngt) +
                                "; with values: " + to_string(gt_arr[0]) + " " +
                                to_string(gt_arr[1]));
@@ -264,22 +272,22 @@ vector<Site> hapfuse::load_chunk(const char *F, bool first) {
     int n_arr = 0, m_arr = 0;
     float *arr = NULL;
     int stride = 0;
-    if (bcf_get_fmt(hdr, rec, "APP")) {
+    if (bcf_get_fmt(hdr.get(), rec.get(), "APP")) {
       stride = 2;
-      n_arr = bcf_get_format_float(hdr, rec, "APP", &arr, &m_arr);
-      assert(n_arr / stride == bcf_hdr_nsamples(hdr));
+      n_arr = bcf_get_format_float(hdr.get(), rec.get(), "APP", &arr, &m_arr);
+      assert(n_arr / stride == bcf_hdr_nsamples(hdr.get()));
     }
     // get GP array
-    else if (bcf_get_fmt(hdr, rec, "GP")) {
+    else if (bcf_get_fmt(hdr.get(), rec.get(), "GP")) {
       stride = 3;
-      n_arr = bcf_get_format_float(hdr, rec, "GP", &arr, &m_arr);
+      n_arr = bcf_get_format_float(hdr.get(), rec.get(), "GP", &arr, &m_arr);
     } else {
       free(arr);
       throw std::runtime_error("could not read record");
     }
 
     // cycle through sample vals
-    for (int sampNum = 0; sampNum < bcf_hdr_nsamples(hdr); ++sampNum) {
+    for (int sampNum = 0; sampNum < bcf_hdr_nsamples(hdr.get()); ++sampNum) {
 
       assert(gt_arr[sampNum * 2] != bcf_gt_missing);
       assert(gt_arr[sampNum * 2] != bcf_int32_vector_end);
@@ -303,12 +311,12 @@ vector<Site> hapfuse::load_chunk(const char *F, bool first) {
       float pHap1;
       float pHap2;
       // parse APPs
-      if (bcf_get_fmt(hdr, rec, "APP")) {
+      if (bcf_get_fmt(hdr.get(), rec.get(), "APP")) {
         pHap1 = phred2Prob(arr[sampNum * stride]);
         pHap2 = phred2Prob(arr[sampNum * stride + 1]);
       }
       // parse GPs
-      else if (bcf_get_fmt(hdr, rec, "GP")) {
+      else if (bcf_get_fmt(hdr.get(), rec.get(), "GP")) {
         std::tie(pHap1, pHap2) = extractGP(&arr[sampNum * stride], gtA, gtB);
       } else
         throw std::runtime_error("could not load GP or APP field ");
@@ -329,10 +337,6 @@ vector<Site> hapfuse::load_chunk(const char *F, bool first) {
     free(arr);
     free(gt_arr);
   }
-
-  bcf_destroy1(rec);
-  bcf_hdr_destroy(hdr);
-  hts_close(fp);
 
   return chunk;
 }
@@ -379,12 +383,13 @@ void hapfuse::write_site(const Site &osite) const {
   assert(m_hdr_out);
   assert(m_fusedVCF);
   // fill empty record with data and then print
-  bcf1_t *rec = bcf_init1();
+  std::unique_ptr<bcf1_t, void (*)(bcf1_t *)> rec(
+      bcf_init1(), [](bcf1_t *b) { bcf_destroy1(b); });
   string alleles;
   for (auto a : osite.all)
     alleles += a + ",";
   alleles.pop_back();
-  bcf_update_alleles_str(m_hdr_out, rec, alleles.c_str());
+  bcf_update_alleles_str(m_hdr_out, rec.get(), alleles.c_str());
   rec->pos = osite.pos - 1;
   rec->rid = bcf_hdr_name2id(m_hdr_out, osite.chr.c_str());
 
@@ -444,13 +449,13 @@ void hapfuse::write_site(const Site &osite) const {
     // ","
     //           << GPs[2] << ":" << p0 << "," << p1;
   }
-  bcf_update_genotypes(m_hdr_out, rec, gts.data(), gts.size());
-  bcf_update_format_float(m_hdr_out, rec, "GP", lineGPs.data(), lineGPs.size());
-  bcf_update_format_float(m_hdr_out, rec, "APP", lineAPPs.data(),
+  bcf_update_genotypes(m_hdr_out, rec.get(), gts.data(), gts.size());
+  bcf_update_format_float(m_hdr_out, rec.get(), "GP", lineGPs.data(),
+                          lineGPs.size());
+  bcf_update_format_float(m_hdr_out, rec.get(), "APP", lineAPPs.data(),
                           lineAPPs.size());
 
-  bcf_write(m_fusedVCF, m_hdr_out, rec);
-  bcf_destroy1(rec);
+  bcf_write(m_fusedVCF, m_hdr_out, rec.get());
 }
 
 bool hapfuse::load_dir(const char *D) {
@@ -459,23 +464,23 @@ bool hapfuse::load_dir(const char *D) {
   if (d.size() && d[d.size() - 1] != '/')
     d += '/';
 
-  DIR *dir = opendir(D);
+  std::unique_ptr<DIR, void (*)(DIR *)> dir(opendir(D),
+                                            [](DIR *d) { closedir(d); });
 
-  if (dir == NULL) {
+  if (dir == nullptr) {
     cerr << "fail to open " << D << "\n";
     return false;
   }
 
   struct dirent *ptr;
 
-  while ((ptr = readdir(dir)) != NULL) {
+  while ((ptr = readdir(dir.get())) != NULL) {
     string s = d + ptr->d_name;
 
     if (s.find(".vcf.gz") != string::npos)
       file.push_back(s);
   }
 
-  closedir(dir);
   sort(file.begin(), file.end());
   return true;
 }
@@ -493,7 +498,7 @@ void hapfuse::work() {
   vector<double> sum;
   list<Site> outputSites;
   std::future<void> outputFut;
-  vector<std::future<vector<Site> > > chunkFutures;
+  list<std::future<vector<Site> > > chunkFutures;
   for (uint i = 0; i < file.size(); i++) {
 
     // add chunks to the future vector
@@ -512,7 +517,9 @@ void hapfuse::work() {
       chunkFutures.push_back(std::async(launch::async, &hapfuse::load_chunk,
                                         this, file[i + 1].c_str(), false));
 
-    vector<Site> chunk = std::move(chunkFutures[i].get());
+    assert(!chunkFutures.empty());
+    vector<Site> chunk = std::move(chunkFutures.front().get());
+    chunkFutures.pop_front();
     unsigned in = m_names.size();
 
     // write out any sites that have previously been loaded,
@@ -534,7 +541,6 @@ void hapfuse::work() {
         if (li->pos == chunk[m].pos) {
           double *p = &(li->hap[0]), *q = &(chunk[m].hap[0]);
 
-//#pragma omp parallel for
           for (uint j = 0; j < in; j++) {
             sum[j * 2] += p[j * 2] * q[j * 2] + p[j * 2 + 1] * q[j * 2 + 1];
             sum[j * 2 + 1] += p[j * 2] * q[j * 2 + 1] + p[j * 2 + 1] * q[j * 2];
@@ -604,7 +610,7 @@ int main(int argc, char **argv) {
   int opt;
   string mode = ""; // default is compressed bcf
   bool is_x = false;
-//  size_t numThreads = 1;
+  //  size_t numThreads = 1;
 
   while ((opt = getopt(argc, argv, "d:g:o:O:")) >= 0) {
     switch (opt) {
@@ -628,7 +634,7 @@ int main(int argc, char **argv) {
       throw runtime_error("unexpected option: " + std::string(optarg));
     }
   }
-//  omp_set_num_threads(numThreads);
+  //  omp_set_num_threads(numThreads);
 
   // processing vcf files
   vector<string> inFiles;

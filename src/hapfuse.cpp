@@ -26,6 +26,7 @@
 #include <htslib/vcf.h>
 #include <future>
 #include <memory>
+#include <sys/stat.h>
 
 #include "version.hpp"
 #include "utils.hpp"
@@ -604,58 +605,71 @@ int main(int argc, char **argv) {
   if (argc < 3)
     hapfuse::document();
 
-  string outFile;
-  string genderFile;
-  string inFileDir;
-  int opt;
-  string mode = ""; // default is compressed bcf
-  bool is_x = false;
-  //  size_t numThreads = 1;
+  try {
+    string outFile;
+    string genderFile;
+    string inFileDir;
+    int opt;
+    string mode = ""; // default is compressed bcf
+    bool is_x = false;
+    //  size_t numThreads = 1;
 
-  while ((opt = getopt(argc, argv, "d:g:o:O:")) >= 0) {
-    switch (opt) {
-    case 'g':
-      is_x = true;
-      genderFile = optarg;
-      break;
+    while ((opt = getopt(argc, argv, "d:g:o:O:")) >= 0) {
+      switch (opt) {
+      case 'g':
+        is_x = true;
+        genderFile = optarg;
+        break;
 
-    case 'o':
-      outFile = optarg;
-      break;
+      case 'o':
+        outFile = optarg;
+        break;
 
-    case 'O':
-      mode = optarg;
-      break;
+      case 'O':
+        mode = optarg;
+        break;
 
-    case 'd':
-      inFileDir = optarg;
-      break;
-    default:
-      throw runtime_error("unexpected option: " + std::string(optarg));
+      case 'd':
+        inFileDir = optarg;
+        break;
+      default:
+        throw runtime_error("unexpected option: " + std::string(optarg));
+      }
     }
+    //  omp_set_num_threads(numThreads);
+
+    // processing vcf files
+    vector<string> inFiles;
+
+    // also check for file existence
+    struct stat buffer;
+    for (int index = optind; index < argc; index++) {
+      if (stat(argv[index], &buffer) == 0)
+        inFiles.push_back(argv[index]);
+      else
+        throw runtime_error("Input file does not exist [" +
+                            string(argv[index]) + "]");
+    }
+
+    hapfuse hf(outFile, mode, is_x);
+
+    if (hf.is_x())
+      hf.gender(genderFile.c_str());
+
+    if (!inFileDir.empty())
+      hf.load_dir(inFileDir.c_str());
+    else if (!inFiles.empty())
+      hf.load_files(inFiles);
+    else {
+      cerr << "no input files" << endl;
+      hf.document();
+    }
+
+    hf.work();
   }
-  //  omp_set_num_threads(numThreads);
-
-  // processing vcf files
-  vector<string> inFiles;
-
-  for (int index = optind; index < argc; index++)
-    inFiles.push_back(argv[index]);
-
-  hapfuse hf(outFile, mode, is_x);
-
-  if (hf.is_x())
-    hf.gender(genderFile.c_str());
-
-  if (!inFileDir.empty())
-    hf.load_dir(inFileDir.c_str());
-  else if (!inFiles.empty())
-    hf.load_files(inFiles);
-  else {
-    cerr << "no input files" << endl;
-    hf.document();
+  catch (std::exception &e) {
+    cerr << "Error: " << e.what() << endl;
+    exit(1);
   }
-
-  hf.work();
   return 0;
 }

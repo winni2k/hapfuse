@@ -589,12 +589,18 @@ void hapfuse::document(void) {
   cerr << "\njoint chunked haplotypes into chromosome wide haplotypes";
   cerr << "\nauthor Warren W Kretzschmar @ Marchini Group @ U of Oxford";
   cerr << "\nbased on code by Yi Wang @ Fuli Yu' Group @ BCM-HGSC";
-  cerr << "\nusage hapfuse [-g genderFile] [-d inFileDir] < -o out.vcf > < "
-          "vcf "
-          "files to process in order >";
-  cerr << "\n";
-  cerr << "\n-g [file]\tFile that indicates which gender each sample is. Only "
-          "use for x chromosome.";
+  cerr << "\n\nUsage:\thapfuse [options] <-o out.vcf> <VCF/BCF files to "
+          "process in "
+          "order>";
+
+  cerr << "\n\n\t-o <file>\tName of output file";
+
+  cerr << "\n\t-O <b|u|z|v>\tOutput file type. b: compressed BCF, u: "
+          "uncompressed BCF, z: compressed VCF, v: uncompressed VCF [v]";
+
+  cerr
+      << "\n\t-g <file>\tFile that indicates which gender each sample is. Only "
+         "use for x chromosome.";
   cerr << "\n\t\tExample: NA21522 male";
   cerr << "\n\n";
   exit(1);
@@ -608,7 +614,7 @@ int main(int argc, char **argv) {
   string genderFile;
   string inFileDir;
   int opt;
-  string mode = ""; // default is compressed bcf
+  string mode = "v"; // default is uncompressed vcf
   bool is_x = false;
   //  size_t numThreads = 1;
 

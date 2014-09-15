@@ -13,7 +13,7 @@ VERSION := $(shell grep VERSION_MAJOR version.hpp | cut -f3 -d' ').$(shell grep 
 BIN=../bin
 #SRC=src
 
-BOOSTLIB = -lboost_iostreams-mt #alternatively: /opt/boost/boost-1.54.0-intel/lib/libboost_iostreams.a
+BOOSTLIB = -lboost_iostreams #alternatively: /opt/boost/boost-1.54.0-intel/lib/libboost_iostreams.a
 export LIBS += -lgsl -lgslcblas -lbz2 $(BOOSTLIB) -lm -lstdc++ -lz -lhts
 
 # path variables

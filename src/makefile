@@ -1,9 +1,10 @@
 export CXX= g++-4.7+
 
-debug: DEBUGFLAGS = -ggdb
-debug: CXXFLAGS += -O3
+debug: DEBUGFLAGS= -g
+CXXFLAGS +=-Wall -Wextra -std=c++11 -std=gnu++11 $(DEBUGFLAGS)
+
+debug: CXXFLAGS += -Og
 all: CXXFLAGS += -O3
-test: CXXFLAGS += -g
 
 VERSION := $(shell grep VERSION_MAJOR version.hpp | cut -f3 -d' ').$(shell grep VERSION_MINOR version.hpp | cut -f3 -d' ')
 
@@ -11,7 +12,6 @@ VERSION := $(shell grep VERSION_MAJOR version.hpp | cut -f3 -d' ').$(shell grep 
 BIN=../bin
 #SRC=src
 
-export CXXFLAGS= -Wall -Wextra -std=c++11 -std=gnu++11 $(DEBUGFLAGS)
 BOOSTLIB = -lboost_iostreams #alternatively: /opt/boost/boost-1.54.0-intel/lib/libboost_iostreams.a
 export LIBS += -lgsl -lgslcblas -lbz2 $(BOOSTLIB) -lm -lstdc++ -lz -lhts
 
@@ -21,14 +21,15 @@ export CPLUS_INCLUDE_PATH += :utils
 #export LIBRARY_PATH += :u-wkretzsch-snptools/samtools-0.1.16:u-wkretzsch-snptools/tabix-0.2.5
 #export LD_LIBRARY_PATH += $(LIBRARY_PATH)
 
+EFILE := $(BIN)/hapfuse.$(VERSION)
+DEFILE := $(EFILE).debug
 
-all: $(BIN)/hapfuse.$(VERSION)
+all: $(EFILE)
 
-oxford: $(BIN)/hapfuse.$(VERSION)
-	cd $(BIN) && cp hapfuse.$(VERSION) ~/bin/
-	cd ~/bin && rm -f hapfuse && ln -s hapfuse.$(VERSION) hapfuse
+oxford: $(EFILE)
+	cd $(BIN) && cp hapfuse $@ ~/bin/
 
-debug: $(BIN)/hapfuse.$(VERSION)
+debug: $(DEFILE)
 
 test: $(BIN)/hapfuse.$(VERSION)
 	make -C ../testing
@@ -57,7 +58,11 @@ OBJECT_FILES = utils/utils.o
 HEADER_FILES = utils/utils.hpp.gch
 
 
-$(BIN)/hapfuse.$(VERSION): hapfuse.cpp $(OBJECT_FILES) $(HEADER_FILES)
+$(EFILE): hapfuse.cpp $(OBJECT_FILES) $(HEADER_FILES)
 	mkdir -p $(BIN)
 	$(CXX) $(CXXFLAGS) -o $@ $< $(OBJECT_FILES) $(LIBS)
 	cd $(BIN) && rm -f hapfuse && ln -s hapfuse.$(VERSION) hapfuse
+
+$(DEFILE): hapfuse.cpp $(OBJECT_FILES) $(HEADER_FILES)
+	mkdir -p $(BIN)
+	$(CXX) $(CXXFLAGS) -o $@ $< $(OBJECT_FILES) $(LIBS)

@@ -62,7 +62,8 @@ double phred2Prob(double phred) {
     return pow(10, -phred / 10);
 }
 
-struct Site {
+class Site {
+public:
   vector<double> hap;
   string chr;
   uint32_t pos;
@@ -70,6 +71,17 @@ struct Site {
   vector<string> all;
 
   void write(ofile &fusedVCF);
+
+  bool operator==(const Site &lhs) {
+    if (chr != lhs.chr || pos != lhs.pos)
+      return false;
+    if (all.size() != lhs.all.size())
+      return false;
+    for (size_t i = 0; i < all.size(); ++i)
+      if (all[i] != lhs.all[i])
+        return false;
+    return true;
+  }
 };
 
 class hapfuse {
@@ -539,7 +551,7 @@ void hapfuse::work() {
 
     for (list<Site>::iterator li = site.begin(); li != site.end(); ++li)
       for (uint m = 0; m < chunk.size(); m++)
-        if (li->pos == chunk[m].pos) {
+        if (*li == chunk[m]) {
           double *p = &(li->hap[0]), *q = &(chunk[m].hap[0]);
 
           for (uint j = 0; j < in; j++) {
@@ -559,17 +571,19 @@ void hapfuse::work() {
       }
 
     // add chunk to buffer
+    auto li=site.begin();
     for (uint m = 0; m < chunk.size(); m++) {
       bool found = false;
 
-      for (list<Site>::iterator li = site.begin(); li != site.end(); li++)
-        if (li->pos == chunk[m].pos) {
+      for (; li != site.end(); ++li)
+        if (*li == chunk[m]) {
           found = true;
           li->cov++;
           double *p = &(li->hap[0]), *q = &(chunk[m].hap[0]);
 
           for (uint j = 0; j < in * 2; j++)
             p[j] += q[j];
+          break;
         }
 
       if (!found)
@@ -580,7 +594,7 @@ void hapfuse::work() {
   }
 
   outputFut.get();
-  for (list<Site>::iterator li = site.begin(); li != site.end(); li++)
+  for (list<Site>::iterator li = site.begin(); li != site.end(); ++li)
     write_site(*li);
 }
 

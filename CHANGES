@@ -1,3 +1,7 @@
+v0.9    Fri Sep 19 22:45:37 BST 2014
+        Fixed bug in handling of multiple sites with the same position
+        added checks to make sure all input files exist before proceeding
+
 v0.7    Sun Aug 24 16:57:16 BST 2014
         Added exception safety to raw pointers
 

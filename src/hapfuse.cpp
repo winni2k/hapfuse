@@ -67,7 +67,7 @@ public:
   vector<double> hap;
   string chr;
   uint32_t pos;
-  uint16_t cov;
+  double weight;
   vector<string> all;
 
   void write(ofile &fusedVCF);
@@ -84,17 +84,29 @@ public:
   }
 };
 
+namespace HapfuseHelper {
+struct init {
+  bool is_x = false;
+  std::string outputFile = "";
+  std::string mode = "v";
+  bool useLinearWeighting = false;
+};
+}
+
 class hapfuse {
 private:
   list<Site> site;
   vector<string> file;
   set<string> male;
-  bool m_is_x;
   vector<string> m_names;
+  const HapfuseHelper::init m_init;
+
+  inline size_t numSamps() { return m_names.size(); }
 
   void write_vcf_head();
   vector<Site> load_chunk(const char *F, bool first);
   std::tuple<float, float> extractGP(float *gp, int &gtA, int &gtB);
+  void merge_chunk(vector<Site> chunk);
 
   htsFile *m_fusedVCF = NULL;
   bcf_hdr_t *m_hdr_out = NULL;
@@ -106,35 +118,35 @@ private:
 
 public:
   static void document(void);
-  bool is_x() { return m_is_x; }
+  bool is_x() { return m_init.is_x; }
   bool gender(const char *F);
   bool load_dir(const char *D);
   bool load_files(const vector<string> &inFiles);
   void work();
 
   // destroy output header and output file descriptor
-  hapfuse(const string &outputFile, const string &mode, bool is_x);
+  hapfuse(HapfuseHelper::init init);
   ~hapfuse() {
     bcf_hdr_destroy(m_hdr_out);
     hts_close(m_fusedVCF);
   }
 };
 
-hapfuse::hapfuse(const string &outputFile, const string &mode, bool is_x)
-    : m_is_x(is_x) {
+hapfuse::hapfuse(HapfuseHelper::init init) : m_init(std::move(init)) {
 
   // open output file for writing
   assert(!m_fusedVCF);
-  if (outputFile.size() == 0)
+  if (m_init.outputFile.size() == 0)
     throw runtime_error("Please specify an output file");
 
-  size_t found = mode.find_first_of("buzv");
-  if (mode.size() > 0 && (mode.size() != 1 || found == string::npos))
+  size_t found = m_init.mode.find_first_of("buzv");
+  if (m_init.mode.size() > 0 &&
+      (m_init.mode.size() != 1 || found == string::npos))
     throw runtime_error("-O needs to be 'b' for compressed bcf, 'u' for "
                         "uncompressed bcf, 'z' for compressed vcf or 'v' for "
                         "uncompressed vcf");
-  string cmode = "w" + mode;
-  m_fusedVCF = hts_open(outputFile.c_str(), cmode.c_str());
+  string cmode = "w" + m_init.mode;
+  m_fusedVCF = hts_open(m_init.outputFile.c_str(), cmode.c_str());
 }
 
 bool hapfuse::gender(const char *F) {
@@ -244,7 +256,7 @@ vector<Site> hapfuse::load_chunk(const char *F, bool first) {
     // s will store the site's information
     Site s;
     s.hap.resize(in * 2);
-    s.cov = 1;
+    s.weight = 1; // still need to weight correctly
     string a, b;
 
     ++cnt_lines;
@@ -351,6 +363,21 @@ vector<Site> hapfuse::load_chunk(const char *F, bool first) {
     free(gt_arr);
   }
 
+  // calculate correct weights
+  if (m_init.useLinearWeighting) {
+    assert(!chunk.empty());
+    unsigned chunkStartPos = chunk.front().pos;
+    unsigned chunkEndPos = chunk.back().pos;
+    for (auto &cSite : chunk) {
+      cSite.weight =
+          min(cSite.pos - chunkStartPos, chunkEndPos - cSite.pos) + 1;
+
+      // adjust haps according to weights
+      for (auto &h : cSite.hap)
+        h = h * cSite.weight;
+    }
+  }
+
   return chunk;
 }
 
@@ -407,7 +434,7 @@ void hapfuse::write_site(const Site &osite) const {
   rec->rid = bcf_hdr_name2id(m_hdr_out, osite.chr.c_str());
 
   uint in = osite.hap.size() / 2;
-  double k = 1.0 / osite.cov;
+  double k = 1.0 / osite.weight;
   bool is_par = (osite.pos >= 60001 && osite.pos <= 2699520) ||
                 (osite.pos >= 154931044 && osite.pos <= 155270560);
 
@@ -421,7 +448,7 @@ void hapfuse::write_site(const Site &osite) const {
     double prr = (1 - p0) * (1 - p1), pra = (1 - p0) * p1 + p0 * (1 - p1),
            paa = p0 * p1;
 
-    if (m_is_x && (male.find(m_names[i]) != male.end()) && !is_par) {
+    if (m_init.is_x && (male.find(m_names[i]) != male.end()) && !is_par) {
       if (prr >= paa)
         a = b = 0;
       else
@@ -533,35 +560,42 @@ void hapfuse::work() {
     assert(!chunkFutures.empty());
     vector<Site> chunk = std::move(chunkFutures.front().get());
     chunkFutures.pop_front();
-    unsigned in = m_names.size();
 
     // write out any sites that have previously been loaded,
     // but are not in the chunk we just loaded
-    if (i != 0)
-      outputFut.get();
-    outputSites.clear();
-    while (!site.empty() && site.front().pos < chunk[0].pos) {
-      outputSites.splice(outputSites.end(), site, site.begin());
+    if (!site.empty()) {
+      if (i > 1)
+        outputFut.get();
+      outputSites.clear();
+
+      // find first site with the same position as first chunk position
+      auto li = site.begin();
+      for (; li != site.end(); ++li)
+        if (li->pos >= chunk[0].pos)
+          break;
+      // splice all the site sites that are before chunk[0] in position
+      // into outputSites for printing
+      outputSites.splice(outputSites.end(), site, site.begin(), li);
+      outputFut =
+          std::async(launch::async, &hapfuse::write_sites, this, outputSites);
     }
-    outputFut =
-        std::async(launch::async, &hapfuse::write_sites, this, outputSites);
 
     // find the correct phase
-    sum.assign(in * 2, 0);
+    sum.assign(numSamps() * 2, 0);
 
     for (list<Site>::iterator li = site.begin(); li != site.end(); ++li)
       for (uint m = 0; m < chunk.size(); m++)
         if (*li == chunk[m]) {
           double *p = &(li->hap[0]), *q = &(chunk[m].hap[0]);
 
-          for (uint j = 0; j < in; j++) {
+          for (uint j = 0; j < numSamps(); j++) {
             sum[j * 2] += p[j * 2] * q[j * 2] + p[j * 2 + 1] * q[j * 2 + 1];
             sum[j * 2 + 1] += p[j * 2] * q[j * 2 + 1] + p[j * 2 + 1] * q[j * 2];
           }
         }
 
     // swap phase if needed
-    for (uint j = 0; j < in; j++)
+    for (uint j = 0; j < numSamps(); j++)
       if (sum[j * 2] < sum[j * 2 + 1]) {
         for (uint m = 0; m < chunk.size(); m++) {
           double t = chunk[m].hap[j * 2];
@@ -571,31 +605,58 @@ void hapfuse::work() {
       }
 
     // add chunk to buffer
-    auto li=site.begin();
-    for (uint m = 0; m < chunk.size(); m++) {
-      bool found = false;
-
-      for (; li != site.end(); ++li)
-        if (*li == chunk[m]) {
-          found = true;
-          li->cov++;
-          double *p = &(li->hap[0]), *q = &(chunk[m].hap[0]);
-
-          for (uint j = 0; j < in * 2; j++)
-            p[j] += q[j];
-          break;
-        }
-
-      if (!found)
-        site.push_back(chunk[m]);
-    }
-
+    merge_chunk(std::move(chunk));
     cout << file[i] << endl;
   }
 
-  outputFut.get();
-  for (list<Site>::iterator li = site.begin(); li != site.end(); ++li)
-    write_site(*li);
+  if (file.size() > 1)
+    outputFut.get();
+  for (auto li : site)
+    write_site(li);
+}
+
+void hapfuse::merge_chunk(vector<Site> chunk) {
+
+  if (site.empty()) {
+    // move all the sites over to site
+    for (size_t m = 0; m != chunk.size(); ++m)
+      site.insert(site.end(), std::move(chunk[m]));
+  } else {
+    auto li = site.begin();
+    size_t m = 0;
+    while (li != site.end()) {
+
+      // exit if we have merged in all chunk sites
+      if (m == chunk.size())
+        break;
+
+      // chunk site is before current site
+      // and did not match a previous site
+      if (chunk[m].pos < li->pos) {
+        site.insert(li, std::move(chunk[m]));
+        ++m;
+      }
+      // chunk site matches list site and needs to be merged in
+      else if (chunk[m] == *li) {
+        li->weight += chunk[m].weight;
+        
+        double *p = &(li->hap[0]), *q = &(chunk[m].hap[0]);
+        for (uint j = 0; j < numSamps() * 2; j++)
+          p[j] += q[j];
+
+        ++m;
+        ++li;
+      }
+
+      // chunk site might match a later site in site
+      else
+        ++li;
+    }
+    // load up all the remaining sites in chunk that are past the last site in
+    // site
+    for (; m < chunk.size(); ++m)
+      site.insert(site.end(), std::move(chunk[m]));
+  }
 }
 
 void hapfuse::document(void) {
@@ -626,31 +687,35 @@ int main(int argc, char **argv) {
     hapfuse::document();
 
   try {
-    string outFile;
     string genderFile;
     string inFileDir;
     int opt;
-    string mode = "v"; // default is compressed bcf
-    bool is_x = false;
     //  size_t numThreads = 1;
-
-    while ((opt = getopt(argc, argv, "d:g:o:O:")) >= 0) {
+    HapfuseHelper::init init;
+    while ((opt = getopt(argc, argv, "d:g:o:O:w:")) >= 0) {
       switch (opt) {
       case 'g':
-        is_x = true;
+        init.is_x = true;
         genderFile = optarg;
         break;
 
       case 'o':
-        outFile = optarg;
+        init.outputFile = optarg;
         break;
 
       case 'O':
-        mode = optarg;
+        init.mode = optarg;
         break;
 
       case 'd':
         inFileDir = optarg;
+        break;
+      case 'w':
+        if (string(optarg) == "linear")
+          init.useLinearWeighting = true;
+        else
+          throw runtime_error("Unexpected option argument -w " +
+                              string(optarg));
         break;
       default:
         throw runtime_error("unexpected option: " + std::string(optarg));
@@ -671,7 +736,7 @@ int main(int argc, char **argv) {
                             string(argv[index]) + "]");
     }
 
-    hapfuse hf(outFile, mode, is_x);
+    hapfuse hf(init);
 
     if (hf.is_x())
       hf.gender(genderFile.c_str());

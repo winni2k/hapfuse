@@ -1,9 +1,9 @@
 export CXX= g++-4.7+
 
-debug: DEBUGFLAGS= -g
-CXXFLAGS +=-Wall -Wextra -std=c++11 -std=gnu++11 $(DEBUGFLAGS)
+CXXFLAGS +=-Wall -Wextra -std=c++11 -std=gnu++11 
 
-debug: CXXFLAGS += -Og
+debug: CXXFLAGS += -O0 -g
+test: CXXFLAGS += -O0 -g
 all: CXXFLAGS += -O3
 
 VERSION := $(shell grep VERSION_MAJOR version.hpp | cut -f3 -d' ').$(shell grep VERSION_MINOR version.hpp | cut -f3 -d' ')

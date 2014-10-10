@@ -1,3 +1,6 @@
+v0.10   Fri Oct 10 16:54:34 BST 2014
+        Added linear weighting option for hapfusing
+
 v0.9    Fri Sep 19 22:45:37 BST 2014
         Fixed bug in handling of multiple sites with the same position
         added checks to make sure all input files exist before proceeding

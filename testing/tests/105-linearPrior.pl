@@ -6,7 +6,8 @@ use Test::Files;
 use File::Spec;
 use File::Path qw(make_path remove_tree);
 
-my $tag           = "test10";
+my $tag           = "test105";
+my $parentTag = "test10";
 my $expected_file = File::Spec->catfile( qw/ .. samples /,
     $tag, $tag . '.expected.madeUpData.fused.vcf' );
 
@@ -17,7 +18,7 @@ my $resultsName = "madeUpData";
 my $results_vcf =
   File::Spec->catfile( $resDir, $tag . ".$resultsName.fused.vcf" );
 
-my $cmd = "../bin/hapfuse -o $results_vcf ../samples/$tag/$tag.madeUpData*.vcf";
+my $cmd = "../bin/hapfuse -o $results_vcf -w linear ../samples/$tag/$parentTag.madeUpData*.vcf";
 print "Call: $cmd\n";
 system $cmd;
 

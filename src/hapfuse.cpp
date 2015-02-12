@@ -50,6 +50,7 @@ Later changes were made by Warren Kretzschmar <wkretzsch@gmail.com>
 #include <future>
 #include <memory>
 #include <sys/stat.h>
+#include <getopt.h>
 
 #include "version.hpp"
 #include "utils.hpp"
@@ -662,7 +663,7 @@ void hapfuse::merge_chunk(vector<Site> chunk) {
       // chunk site matches list site and needs to be merged in
       else if (chunk[m] == *li) {
         li->weight += chunk[m].weight;
-        
+
         double *p = &(li->hap[0]), *q = &(chunk[m].hap[0]);
         for (uint j = 0; j < numSamps() * 2; j++)
           p[j] += q[j];
@@ -689,17 +690,16 @@ void hapfuse::document(void) {
   cerr << "\nauthor Warren W Kretzschmar @ Marchini Group @ U of Oxford";
   cerr << "\nbased on code by Yi Wang @ Fuli Yu' Group @ BCM-HGSC";
   cerr << "\n\nUsage:\thapfuse [options] <-o out.vcf> <VCF/BCF files to "
-          "process in "
-          "order>";
+          "process in order>";
 
-  cerr << "\n\n\t-o <file>\tName of output file";
-
-  cerr << "\n\t-O <b|u|z|v>\tOutput file type. b: compressed BCF, u: "
-          "uncompressed BCF, z: compressed VCF, v: uncompressed VCF [v]";
+  cerr << "\n\n\t-o, --output <file>\tName of output file";
 
   cerr
-      << "\n\t-g <file>\tFile that indicates which gender each sample is. Only "
-         "use for x chromosome.";
+      << "\n\t-O, --output-type <b|u|z|v>\tOutput file type. b: compressed "
+         "BCF, u: uncompressed BCF, z: compressed VCF, v: uncompressed VCF [v]";
+
+  cerr << "\n\t-g, --gender-file <file>\tFile that indicates which gender each "
+          "sample is. Only use for x chromosome.";
   cerr << "\n\t\tExample: NA21522 male";
   cerr << "\n\n";
   exit(1);
@@ -715,7 +715,18 @@ int main(int argc, char **argv) {
     int opt;
     //  size_t numThreads = 1;
     HapfuseHelper::init init;
-    while ((opt = getopt(argc, argv, "d:g:o:O:w:")) >= 0) {
+
+    static struct option loptions[] = {
+      { "gender-file", required_argument, nullptr, 'g' },
+      { "output", required_argument, nullptr, 'o' },
+      { "output-type", required_argument, nullptr, 'O' },
+      { "input-dir", required_argument, nullptr, 'd' },
+      { "ligation-method", required_argument, nullptr, 'w' },
+      { 0, 0, 0, 0 }
+    };
+
+    while ((opt = getopt_long(argc, argv, "d:g:o:O:w:", loptions, nullptr)) >=
+           0) {
       switch (opt) {
       case 'g':
         init.is_x = true;

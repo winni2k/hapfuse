@@ -10,8 +10,12 @@ my $resultsDir = "results";
 remove_tree($resultsDir) if -d $resultsDir;
 make_path($resultsDir);
 
-my $tests = qx/find tests -name "*.pl"/;
+my $tests = q/find /."$ENV{srcdir}/src/testing/tests".q/ -name "*.pl"/;
+$tests = qx/$tests/;
+print "Found tests: $tests\n";
 chomp $tests;
 my @tests = split(/\s+/, $tests);
 
-$harness->runtests(sort @tests);
+my $ret = $harness->runtests(sort @tests);
+
+exit !$ret->all_passed;

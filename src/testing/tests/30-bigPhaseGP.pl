@@ -5,6 +5,8 @@ use File::Spec;
 use File::Basename;
 use File::Path qw(make_path remove_tree);
 
+my $sd = $ENV{srcdir};
+
 unless ( qx/which vcftools/ =~ m/.*vcftools$/ ) {
     plan skip_all => "vcftools does not exist on system";
 }
@@ -17,10 +19,10 @@ my $testTag = 'test30';
 
 my $resultsDir = "results/$testTag";
 make_path($resultsDir);
-my $expectedHap = File::Spec->catfile( qw/ .. samples /, $testTag,
+my $expectedHap = File::Spec->catfile( $sd, q/samples/, $testTag,
 "$testTag.expected.chr20.consensus.STv1.2.13.C100.K100.20_20059716_20399169.first2Samp.vcf.impute.hap"
 );
-my $expectedLegend = File::Spec->catfile( qw/ .. samples /, $testTag,
+my $expectedLegend = File::Spec->catfile($sd, q/samples/, $testTag,
 "$testTag.expected.chr20.consensus.STv1.2.13.C100.K100.20_20059716_20399169.first2Samp.vcf.impute.legend"
 );
 
@@ -32,7 +34,7 @@ my $resultsLegend =
 
 my $results_vcf = File::Spec->catfile( $resultsDir, $resultsName . q/.vcf/ );
 system
-  "../bin/hapfuse -o $results_vcf ../samples/$testTag/$testTag.chr20*.bin.vcf";
+  "./hapfuse -o $results_vcf $sd/samples/$testTag/$testTag.chr20*.bin.vcf";
 
 # pull haplotypes out of vcf
 system

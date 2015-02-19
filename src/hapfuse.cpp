@@ -27,39 +27,24 @@ THE SOFTWARE.
 Later changes were made by Warren Kretzschmar <wkretzsch@gmail.com>
 
 */
-#include <iostream>
-#include <iomanip>
-#include <algorithm>
-#include <dirent.h>
-#include <stdint.h>
-#include <cstring>
-#include <fstream>
-#include <sstream>
-#include <cstdio>
-#include <cstdlib>
-#include <string>
-#include <vector>
-#include <zlib.h>
-#include <list>
-#include <set>
-#include <boost/algorithm/string.hpp>
-#include <cmath>
-#include <cfloat>
-#include <htslib/hts.h>
-#include <htslib/vcf.h>
-#include <future>
-#include <memory>
-#include <sys/stat.h>
-#include <getopt.h>
 
-#include "version.hpp"
-#include "utils.hpp"
-
-#define BUFFER_SIZE                                                            \
-  1000000 // 65536 chars is not big enough for more than ~50,000 samples
-#define EPSILON 0.001 // precision of input floats
+#include "hapfuse.hpp"
 
 using namespace std;
+
+namespace HapfuseHelper {
+
+void load_files_from_file(const std::string &fileFile,
+                          std::vector<std::string> &inFiles) {
+
+  ifile fdFiles(fileFile);
+  std::string line;
+  if (!fdFiles.isGood())
+    throw std::runtime_error("Could not open file: " + fileFile);
+
+  while (getline(fdFiles, line))
+    inFiles.push_back(line);
+}
 
 // converts a probability to phred scale
 double prob2Phred(double prob) {
@@ -85,78 +70,52 @@ double phred2Prob(double phred) {
   else
     return pow(10, -phred / 10);
 }
-
-class Site {
-public:
-  vector<double> hap;
-  string chr;
-  uint32_t pos;
-  double weight;
-  vector<string> all;
-
-  void write(ofile &fusedVCF);
-
-  bool operator==(const Site &lhs) {
-    if (chr != lhs.chr || pos != lhs.pos)
-      return false;
-    if (all.size() != lhs.all.size())
-      return false;
-    for (size_t i = 0; i < all.size(); ++i)
-      if (all[i] != lhs.all[i])
-        return false;
-    return true;
-  }
-};
-
-namespace HapfuseHelper {
-struct init {
-  bool is_x = false;
-  std::string outputFile = "";
-  std::string mode = "v";
-  bool useLinearWeighting = false;
-};
 }
 
-class hapfuse {
-private:
-  list<Site> site;
-  vector<string> file;
-  set<string> male;
-  vector<string> m_names;
-  const HapfuseHelper::init m_init;
-
-  inline size_t numSamps() { return m_names.size(); }
-
-  void write_vcf_head();
-  vector<Site> load_chunk(const char *F, bool first);
-  std::tuple<float, float> extractGP(float *gp, int &gtA, int &gtB);
-  void merge_chunk(vector<Site> chunk);
-
-  htsFile *m_fusedVCF = NULL;
-  bcf_hdr_t *m_hdr_out = NULL;
-  void write_site(const Site &osite) const;
-  void write_sites(const list<Site> &outSites) {
-    for (auto s : outSites)
-      write_site(s);
-  }
-
-public:
-  static void document(void);
-  bool is_x() { return m_init.is_x; }
-  bool gender(const char *F);
-  bool load_dir(const char *D);
-  bool load_files(const vector<string> &inFiles);
-  void work();
-
-  // destroy output header and output file descriptor
-  hapfuse(HapfuseHelper::init init);
-  ~hapfuse() {
-    bcf_hdr_destroy(m_hdr_out);
-    hts_close(m_fusedVCF);
-  }
-};
-
 hapfuse::hapfuse(HapfuseHelper::init init) : m_init(std::move(init)) {
+
+  // if infile is given, make sure infile from file is not given
+  if (!m_init.inFiles.empty() && !m_init.wtcccHapFiles.empty())
+    throw std::runtime_error(
+        "Please do not specify any extra files on command line if -h is used");
+
+  // Input files will be WTCCC style
+  if (!m_init.wtcccHapFiles.empty()) {
+    m_inputFileType = HapfuseHelper::fileType::WTCCC;
+
+    HapfuseHelper::load_files_from_file(m_init.wtcccHapFiles, m_wtcccHapFiles);
+    if (m_init.wtcccSampFiles.empty())
+      throw std::runtime_error(
+          "Need to define WTCCC sample files list with -H if using -h");
+    else
+      HapfuseHelper::load_files_from_file(m_init.wtcccSampFiles,
+                                          m_wtcccSampFiles);
+    if (m_wtcccHapFiles.size() != m_wtcccSampFiles.size())
+      throw std::runtime_error(
+          "-h and -H need to contain same number of files");
+
+  }
+  // else load BCFs from command line
+  else {
+    m_inputFileType = HapfuseHelper::fileType::BCF;
+    if (!m_init.inFiles.empty())
+      file = m_init.inFiles;
+    else
+      throw std::runtime_error("No input files given");
+  }
+
+  struct stat buffer;
+  for (auto oneFile : file)
+    if (stat(oneFile.c_str(), &buffer) != 0)
+      throw runtime_error("Input file does not exist [" + oneFile + "]");
+
+  for (auto oneFile : m_wtcccHapFiles)
+    if (stat(oneFile.c_str(), &buffer) != 0)
+      throw runtime_error("Input file does not exist [" + oneFile + "]");
+
+  for (auto oneFile : m_wtcccSampFiles)
+    if (stat(oneFile.c_str(), &buffer) != 0)
+      throw runtime_error("Input file does not exist [" + oneFile + "]");
 
   // open output file for writing
   assert(!m_fusedVCF);
@@ -200,7 +159,7 @@ std::tuple<float, float> hapfuse::extractGP(float *gp, int &gtA, int &gtB) {
   GPs.reserve(3);
   double sum = 0;
   for (int i = 0; i < 3; ++i, ++gp) {
-    GPs.push_back(phred2Prob(*gp));
+    GPs.push_back(HapfuseHelper::phred2Prob(*gp));
     sum += GPs[i];
   }
 
@@ -226,10 +185,44 @@ std::tuple<float, float> hapfuse::extractGP(float *gp, int &gtA, int &gtB) {
   return make_tuple(pHap1, pHap2);
 }
 
-vector<Site> hapfuse::load_chunk(const char *F, bool first) {
+vector<Site> hapfuse::load_chunk(size_t chunkIdx, bool first) {
 
-  // open F and make sure it opened ok
-  string inFile(F);
+  if (m_inputFileType == HapfuseHelper::fileType::BCF) {
+    return load_chunk_bcf(file.at(chunkIdx), first);
+  } else if (m_inputFileType == HapfuseHelper::fileType::WTCCC) {
+    return load_chunk_WTCCC(m_wtcccHapFiles.at(chunkIdx),
+                            m_wtcccSampFiles.at(chunkIdx), first);
+  } else
+    throw std::logic_error("Unknown input chunk type");
+}
+
+vector<Site> hapfuse::load_chunk_WTCCC(const string &hapFile,
+                                       const string &sampFile, bool first) {
+  // load and check samples
+  HapSamp chunk(std::move(hapFile), sampFile);
+
+  if (m_names.empty()) {
+    if (first)
+      m_names = chunk.GetSamps();
+    else
+      throw std::logic_error("m_names is empty");
+  } else
+    chunk.CheckSamps(m_names);
+
+  // load haplotypes
+  vector<Site> sites;
+  while (true) {
+    Site line = chunk.GetSite();
+    line.weight = 1;
+    if (line.empty())
+      break;
+    sites.push_back(std::move(line));
+  }
+  return sites;
+}
+
+vector<Site> hapfuse::load_chunk_bcf(const string &inFile, bool first) {
+
   //  auto del = [](htsFile *f) { hts_close(f); };
   //  std::unique_ptr<htsFile, decltype(del)> fp(hts_open(inFile.c_str(), "r"),
   //                                             del);
@@ -251,7 +244,6 @@ vector<Site> hapfuse::load_chunk(const char *F, bool first) {
     write_vcf_head();
   }
 
-  string temp;
   vector<string> name;
   vector<Site> chunk;
 
@@ -278,9 +270,9 @@ vector<Site> hapfuse::load_chunk(const char *F, bool first) {
     bcf_unpack(rec.get(), BCF_UN_STR | BCF_UN_IND);
 
     // s will store the site's information
-    Site s;
-    s.hap.resize(in * 2);
-    s.weight = 1; // still need to weight correctly
+    Site site;
+    site.hap.resize(in * 2);
+    site.weight = 1; // still need to weight correctly
     string a, b;
 
     ++cnt_lines;
@@ -289,8 +281,8 @@ vector<Site> hapfuse::load_chunk(const char *F, bool first) {
     // fill in site information (s)
     //    vector<string> tokens;
     //    boost::split(tokens, buffer, boost::is_any_of("\t"));
-    s.chr = bcf_hdr_id2name(hdr.get(), rec->rid);
-    s.pos = (rec->pos + 1);
+    site.chr = bcf_hdr_id2name(hdr.get(), rec->rid);
+    site.pos = (rec->pos + 1);
 
     // make sure site is biallelic
     assert(rec->n_allele == 2);
@@ -298,8 +290,8 @@ vector<Site> hapfuse::load_chunk(const char *F, bool first) {
     string a2(rec->d.allele[1]);
 
     // make sure site is snp
-    s.all.push_back(a1);
-    s.all.push_back(a2);
+    site.all.push_back(a1);
+    site.all.push_back(a2);
 
     if (!bcf_get_fmt(hdr.get(), rec.get(), "GT"))
       throw std::runtime_error("expected GT field in VCF");
@@ -361,8 +353,8 @@ vector<Site> hapfuse::load_chunk(const char *F, bool first) {
       float pHap2;
       // parse APPs
       if (bcf_get_fmt(hdr.get(), rec.get(), "APP")) {
-        pHap1 = phred2Prob(arr[sampNum * stride]);
-        pHap2 = phred2Prob(arr[sampNum * stride + 1]);
+        pHap1 = HapfuseHelper::phred2Prob(arr[sampNum * stride]);
+        pHap2 = HapfuseHelper::phred2Prob(arr[sampNum * stride + 1]);
       }
       // parse GPs
       else if (bcf_get_fmt(hdr.get(), rec.get(), "GP")) {
@@ -379,10 +371,10 @@ vector<Site> hapfuse::load_chunk(const char *F, bool first) {
       if (pHap2 < 0)
         pHap2 = 0;
 
-      s.hap[sampNum * 2] = pHap1;
-      s.hap[sampNum * 2 + 1] = pHap2;
+      site.hap[sampNum * 2] = pHap1;
+      site.hap[sampNum * 2 + 1] = pHap2;
     }
-    chunk.push_back(s);
+    chunk.push_back(std::move(site));
     free(arr);
     free(gt_arr);
   }
@@ -428,8 +420,7 @@ void hapfuse::write_vcf_head() {
     throw runtime_error("could not append VCF GP format header");
 
   ostringstream version;
-  version << "##source=UoO:SNPTools:hapfuseV" << hapfuse_VERSION_MAJOR << "."
-          << hapfuse_VERSION_MINOR;
+  version << "##source=UoO:SNPTools:hapfuseV" << PACKAGE_VERSION;
   if (bcf_hdr_append(m_hdr_out, version.str().c_str()))
     throw runtime_error("could not append hapfuse header");
 
@@ -498,10 +489,10 @@ void hapfuse::write_site(const Site &osite) const {
     GPs[2] = p0 * p1;
 
     for (auto &GP : GPs)
-      GP = prob2Phred(GP);
+      GP = HapfuseHelper::prob2Phred(GP);
 
-    p0 = prob2Phred(p0);
-    p1 = prob2Phred(p1);
+    p0 = HapfuseHelper::prob2Phred(p0);
+    p1 = HapfuseHelper::prob2Phred(p1);
 
     gts.push_back(bcf_gt_phased(a));
     gts.push_back(bcf_gt_phased(b));
@@ -549,14 +540,6 @@ bool hapfuse::load_dir(const char *D) {
   return true;
 }
 
-bool hapfuse::load_files(const vector<string> &inFiles) {
-
-  for (auto inFile : inFiles)
-    file.push_back(inFile);
-
-  return true;
-}
-
 void hapfuse::work() {
 
   vector<double> sum;
@@ -569,17 +552,17 @@ void hapfuse::work() {
     // make sure the first chunk is loaded synchronously so that m_name can be
     // filled and the header can be written without hiccups
     if (i == 0)
-      chunkFutures.push_back(std::async(launch::async, &hapfuse::load_chunk,
-                                        this, file[i].c_str(), i == 0));
+      chunkFutures.push_back(
+          std::async(launch::async, &hapfuse::load_chunk, this, i, i == 0));
     // load up a few chunks in parallel
     // make sure not to go off the end...
     else if (i == 1)
       for (unsigned j = 0; j != 2 && j + i < file.size(); ++j)
         chunkFutures.push_back(std::async(launch::async, &hapfuse::load_chunk,
-                                          this, file[i + j].c_str(), false));
+                                          this, i + j, false));
     else if (i + 1 < file.size())
-      chunkFutures.push_back(std::async(launch::async, &hapfuse::load_chunk,
-                                        this, file[i + 1].c_str(), false));
+      chunkFutures.push_back(
+          std::async(launch::async, &hapfuse::load_chunk, this, i + 1, false));
 
     assert(!chunkFutures.empty());
     vector<Site> chunk = std::move(chunkFutures.front().get());
@@ -684,8 +667,7 @@ void hapfuse::merge_chunk(vector<Site> chunk) {
 }
 
 void hapfuse::document(void) {
-  cerr << "\nhapfuse v" << hapfuse_VERSION_MAJOR << "."
-       << hapfuse_VERSION_MINOR;
+  cerr << "\nhapfuse v" << PACKAGE_VERSION;
   cerr << "\njoint chunked haplotypes into chromosome wide haplotypes";
   cerr << "\nauthor Warren W Kretzschmar @ Marchini Group @ U of Oxford";
   cerr << "\nbased on code by Yi Wang @ Fuli Yu' Group @ BCM-HGSC";
@@ -703,92 +685,4 @@ void hapfuse::document(void) {
   cerr << "\n\t\tExample: NA21522 male";
   cerr << "\n\n";
   exit(1);
-}
-
-int main(int argc, char **argv) {
-  if (argc < 3)
-    hapfuse::document();
-
-  try {
-    string genderFile;
-    string inFileDir;
-    int opt;
-    //  size_t numThreads = 1;
-    HapfuseHelper::init init;
-
-    static struct option loptions[] = {
-      { "gender-file", required_argument, nullptr, 'g' },
-      { "output", required_argument, nullptr, 'o' },
-      { "output-type", required_argument, nullptr, 'O' },
-      { "input-dir", required_argument, nullptr, 'd' },
-      { "ligation-method", required_argument, nullptr, 'w' },
-      { 0, 0, 0, 0 }
-    };
-
-    while ((opt = getopt_long(argc, argv, "d:g:o:O:w:", loptions, nullptr)) >=
-           0) {
-      switch (opt) {
-      case 'g':
-        init.is_x = true;
-        genderFile = optarg;
-        break;
-
-      case 'o':
-        init.outputFile = optarg;
-        break;
-
-      case 'O':
-        init.mode = optarg;
-        break;
-
-      case 'd':
-        inFileDir = optarg;
-        break;
-      case 'w':
-        if (string(optarg) == "linear")
-          init.useLinearWeighting = true;
-        else
-          throw runtime_error("Unexpected option argument -w " +
-                              string(optarg));
-        break;
-      default:
-        throw runtime_error("unexpected option: " + std::string(optarg));
-      }
-    }
-    //  omp_set_num_threads(numThreads);
-
-    // processing vcf files
-    vector<string> inFiles;
-
-    // also check for file existence
-    struct stat buffer;
-    for (int index = optind; index < argc; index++) {
-      if (stat(argv[index], &buffer) == 0)
-        inFiles.push_back(argv[index]);
-      else
-        throw runtime_error("Input file does not exist [" +
-                            string(argv[index]) + "]");
-    }
-
-    hapfuse hf(init);
-
-    if (hf.is_x())
-      hf.gender(genderFile.c_str());
-
-    if (!inFileDir.empty())
-      hf.load_dir(inFileDir.c_str());
-    else if (!inFiles.empty())
-      hf.load_files(inFiles);
-    else {
-      cerr << "no input files" << endl;
-      hf.document();
-    }
-
-    hf.work();
-  }
-  catch (std::exception &e) {
-    cerr << "Error: " << e.what() << endl;
-    exit(1);
-  }
-  return 0;
 }

@@ -4,8 +4,13 @@
 #ifndef _HAPFUSE_HPP
 #define _HAPFUSE_HPP 1
 
+#if __cplusplus <= 199711L
+#error This library needs at least a C++11 compliant compiler
+#endif
+
 #include <iostream>
 #include <iomanip>
+#include <unordered_map>
 #include <algorithm>
 #include <dirent.h>
 #include <stdint.h>
@@ -40,10 +45,13 @@ struct init {
   bool is_x = false;
   std::string outputFile = "";
   std::string mode = "v";
-  bool useLinearWeighting = false;
-  std::string wtcccHapFiles = "";
-  std::string wtcccSampFiles = "";
-  std::vector<std::string> inFiles;
+  WeightingStyle ws = WeightingStyle::AVERAGE;
+  std::string wtcccHapFilesFile = "";
+  std::string wtcccSampFilesFile = "";
+  std::vector<std::string> cmdLineInputFiles;
+  std::unordered_map<std::string, bool> out_format_tags{ { "GT", false },
+                                                         { "GP", false },
+                                                         { "APP", false } };
 };
 
 void load_files_from_file(const std::string &fileFile,
@@ -56,18 +64,22 @@ double prob2Phred(double prob);
 double phred2Prob(double phred);
 
 enum class fileType { WTCCC, BCF };
+
+enum class WeightingStyle { AVERAGE, LINEAR, STEP };
 }
 
 class hapfuse {
 private:
+  const HapfuseHelper::init m_init;
+  size_t m_numInputChunks;
+
   list<Site> site;
-  std::vector<std::string> file; // only used for bcfs
+  std::vector<std::string> m_bcfFiles; // only used for bcfs
   std::vector<std::string> m_wtcccHapFiles;
   std::vector<std::string> m_wtcccSampFiles;
   HapfuseHelper::fileType m_inputFileType = HapfuseHelper::fileType::BCF;
   set<std::string> male;
   std::vector<std::string> m_names;
-  const HapfuseHelper::init m_init;
 
   inline size_t numSamps() { return m_names.size(); }
 

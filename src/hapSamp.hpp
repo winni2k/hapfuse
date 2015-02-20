@@ -18,6 +18,8 @@ private:
   ifile m_hapFD;
   std::vector<std::string> m_samps;
 
+  std::string m_chrom;
+
   Site m_firstSite;
   unsigned m_linesRead = 0;
   std::string m_buffer; // unprocessed data
@@ -25,12 +27,13 @@ private:
   void FillFirstSite();
 
 public:
-  HapSamp(std::string hapFile, const std::string & sampFile);
+  HapSamp(std::string hapFile, const std::string &sampFile);
 
   unsigned GetFirstPos();
   Site GetSite();
   void CheckSamps(const std::vector<std::string> &trueSamps);
   std::vector<std::string> GetSamps() { return m_samps; }
+  std::string GetChrom();
 };
 
 #endif /* _HAPSAMP_HPP */

@@ -1,14 +1,16 @@
 #!/bin/perl
 use strict;
 use warnings;
-use Test::More tests => 2;
+use Test::More tests => 3;
 use Test::Files;
 use File::Spec;
 use File::Path qw(make_path remove_tree);
+use File::Glob ':bsd_glob';
+use File::Slurp;
 
 my $tag           = "test10";
-my $sd = $ENV{srcdir};
-my $expected_file = File::Spec->catfile($sd, q/samples/,
+my $sd            = $ENV{srcdir};
+my $expected_file = File::Spec->catfile( $sd, q/samples/,
     $tag, $tag . '.expected.madeUpData.fused.vcf' );
 
 my $resDir = File::Spec->catfile( qw| results |, $tag );
@@ -18,7 +20,8 @@ my $resultsName = "madeUpData";
 my $results_vcf =
   File::Spec->catfile( $resDir, $tag . ".$resultsName.fused.vcf" );
 
-my $cmd = "./hapfuse -o $results_vcf ../samples/$tag/$tag.madeUpData*.vcf";
+my @chunkVcfs = bsd_glob("../samples/$tag/$tag.madeUpData*.vcf");
+my $cmd = "./hapfuse -o $results_vcf " . join( ' ', @chunkVcfs );
 print "Call: $cmd\n";
 system $cmd;
 
@@ -40,6 +43,28 @@ SKIP: {
 
 compare_filter_ok( $results_vcf, $expected_file, \&vcfComp,
     "hapfuse phases and gets APPs right" );
+
+# let's do the same by converting to WTCCC haps first
+my @chunkHaps =
+  map { my $s = $_; $s =~ s/\.vcf/.hap/; $s } @chunkVcfs;
+my @chunkSamps = map { my $s = $_; $s =~ s/\.vcf/.sample/; $s } @chunkVcfs;
+my $inputHaps =
+  File::Spec->catfile( $resDir, $tag . ".$resultsName.WTCCC.inputHaps" );
+my $inputSamps = $inputHaps;
+$inputSamps =~ s/Haps$/Samps/;
+
+write_file( $inputHaps,  join( "\n", @chunkHaps ) );
+write_file( $inputSamps, join( "\n", @chunkSamps ) );
+
+my $results_vcf_wtccc = $results_vcf;
+$results_vcf_wtccc =~ s/\.vcf$/.wtccc.vcf/;
+
+$cmd = "./hapfuse -o $results_vcf_wtccc -h $inputHaps -s $inputSamps";
+print "Call: $cmd\n";
+system $cmd;
+
+compare_filter_ok( $results_vcf_wtccc, $expected_file, \&vcfComp,
+    "hapfuse phases from haplotypes and gets APPs right" );
 
 sub vcfComp {
     my $line = shift;

@@ -72,40 +72,46 @@ double phred2Prob(double phred) {
 }
 }
 
-hapfuse::hapfuse(HapfuseHelper::init init) : m_init(std::move(init)) {
-
-  // if infile is given, make sure infile from file is not given
-  if (!m_init.inFiles.empty() && !m_init.wtcccHapFiles.empty())
-    throw std::runtime_error(
-        "Please do not specify any extra files on command line if -h is used");
+hapfuse::hapfuse(HapfuseHelper::init init)
+    : m_init(std::move(init)), m_bcfFiles(m_init.cmdLineInputFiles) {
 
   // Input files will be WTCCC style
-  if (!m_init.wtcccHapFiles.empty()) {
+  if (!m_init.wtcccHapFilesFile.empty()) {
     m_inputFileType = HapfuseHelper::fileType::WTCCC;
 
-    HapfuseHelper::load_files_from_file(m_init.wtcccHapFiles, m_wtcccHapFiles);
-    if (m_init.wtcccSampFiles.empty())
+    HapfuseHelper::load_files_from_file(m_init.wtcccHapFilesFile,
+                                        m_wtcccHapFiles);
+    if (m_init.wtcccSampFilesFile.empty())
       throw std::runtime_error(
           "Need to define WTCCC sample files list with -H if using -h");
     else
-      HapfuseHelper::load_files_from_file(m_init.wtcccSampFiles,
+      HapfuseHelper::load_files_from_file(m_init.wtcccSampFilesFile,
                                           m_wtcccSampFiles);
     if (m_wtcccHapFiles.size() != m_wtcccSampFiles.size())
       throw std::runtime_error(
           "-h and -H need to contain same number of files");
 
+    m_numInputChunks = m_wtcccHapFiles.size();
   }
   // else load BCFs from command line
   else {
     m_inputFileType = HapfuseHelper::fileType::BCF;
-    if (!m_init.inFiles.empty())
-      file = m_init.inFiles;
-    else
+    if (m_bcfFiles.empty())
       throw std::runtime_error("No input files given");
+
+    m_numInputChunks = m_bcfFiles.size();
   }
 
+  // if multiple input files are given then error out
+  if (!m_bcfFiles.empty() && !m_wtcccHapFiles.empty())
+    throw std::runtime_error("BCF and WTCCC style input files specified. "
+                             "Please only specify one input file type.");
+
+  if (m_numInputChunks == 0)
+    throw std::runtime_error("No input files specified");
+
   struct stat buffer;
-  for (auto oneFile : file)
+  for (auto oneFile : m_bcfFiles)
     if (stat(oneFile.c_str(), &buffer) != 0)
       throw runtime_error("Input file does not exist [" + oneFile + "]");
 
@@ -119,7 +125,7 @@ hapfuse::hapfuse(HapfuseHelper::init init) : m_init(std::move(init)) {
 
   // open output file for writing
   assert(!m_fusedVCF);
-  if (m_init.outputFile.size() == 0)
+  if (m_init.outputFile.empty())
     throw runtime_error("Please specify an output file");
 
   size_t found = m_init.mode.find_first_of("buzv");
@@ -188,7 +194,7 @@ std::tuple<float, float> hapfuse::extractGP(float *gp, int &gtA, int &gtB) {
 vector<Site> hapfuse::load_chunk(size_t chunkIdx, bool first) {
 
   if (m_inputFileType == HapfuseHelper::fileType::BCF) {
-    return load_chunk_bcf(file.at(chunkIdx), first);
+    return load_chunk_bcf(m_bcfFiles.at(chunkIdx), first);
   } else if (m_inputFileType == HapfuseHelper::fileType::WTCCC) {
     return load_chunk_WTCCC(m_wtcccHapFiles.at(chunkIdx),
                             m_wtcccSampFiles.at(chunkIdx), first);
@@ -201,11 +207,24 @@ vector<Site> hapfuse::load_chunk_WTCCC(const string &hapFile,
   // load and check samples
   HapSamp chunk(std::move(hapFile), sampFile);
 
-  if (m_names.empty()) {
-    if (first)
-      m_names = chunk.GetSamps();
-    else
-      throw std::logic_error("m_names is empty");
+  // Open output VCF for writing
+  if (first) {
+    assert(!m_hdr_out);
+    m_hdr_out = bcf_hdr_init("w");
+
+    assert(m_names.empty());
+    m_names = chunk.GetSamps();
+
+    // populate header with sample names
+    for (auto sampName : m_names)
+      bcf_hdr_add_sample(m_hdr_out, sampName.c_str());
+
+    bcf_hdr_add_sample(m_hdr_out, NULL);
+
+    // add contig
+    bcf_hdr_printf(m_hdr_out, "##contig=<ID=%s>", chunk.GetChrom().c_str());
+
+    write_vcf_head();
   } else
     chunk.CheckSamps(m_names);
 
@@ -241,6 +260,13 @@ vector<Site> hapfuse::load_chunk_bcf(const string &inFile, bool first) {
   if (first) {
     assert(!m_hdr_out);
     m_hdr_out = bcf_hdr_dup(hdr.get());
+
+    // save names to internal string vector
+    assert(m_names.size() == 0);
+    m_names.reserve(bcf_hdr_nsamples(m_hdr_out));
+    for (int i = 0; i < bcf_hdr_nsamples(m_hdr_out); ++i)
+      m_names.push_back(m_hdr_out->samples[i]);
+
     write_vcf_head();
   }
 
@@ -269,7 +295,7 @@ vector<Site> hapfuse::load_chunk_bcf(const string &inFile, bool first) {
     // get the first five and sample columns
     bcf_unpack(rec.get(), BCF_UN_STR | BCF_UN_IND);
 
-    // s will store the site's information
+    // site will store the site's information
     Site site;
     site.hap.resize(in * 2);
     site.weight = 1; // still need to weight correctly
@@ -380,7 +406,7 @@ vector<Site> hapfuse::load_chunk_bcf(const string &inFile, bool first) {
   }
 
   // calculate correct weights
-  if (m_init.useLinearWeighting) {
+  if (m_init.ws == HapfuseHelper::WeightingStyle::LINEAR) {
     assert(!chunk.empty());
     unsigned chunkStartPos = chunk.front().pos;
     unsigned chunkEndPos = chunk.back().pos;
@@ -402,22 +428,25 @@ void hapfuse::write_vcf_head() {
   assert(m_hdr_out);
   assert(m_fusedVCF);
 
-  if (bcf_hdr_append(m_hdr_out,
-                     "##FORMAT=<ID=APP,Number=2,Type=Float,Description="
-                     "\"Phred-scaled allelic probability, "
-                     "P(Allele=1|Haplotype)\">"))
-    throw runtime_error("Could not append VCF APP format header");
+  if (m_init.out_format_tags.at("GT") == true)
+    if (bcf_hdr_append(
+            m_hdr_out,
+            "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">"))
+      throw runtime_error("could not append VCF GT format header");
 
-  if (bcf_hdr_append(
-          m_hdr_out,
-          "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">"))
-    throw runtime_error("could not append VCF GP format header");
+  if (m_init.out_format_tags.at("APP") == true)
+    if (bcf_hdr_append(m_hdr_out,
+                       "##FORMAT=<ID=APP,Number=2,Type=Float,Description="
+                       "\"Phred-scaled allelic probability, "
+                       "P(Allele=1|Haplotype)\">"))
+      throw runtime_error("Could not append VCF APP format header");
 
-  if (bcf_hdr_append(
-          m_hdr_out,
-          "##FORMAT=<ID=GP,Number=3,Type=Float,Description=\"Phred-scaled "
-          "genotype posterior probabilities\">"))
-    throw runtime_error("could not append VCF GP format header");
+  if (m_init.out_format_tags.at("GP") == true)
+    if (bcf_hdr_append(
+            m_hdr_out,
+            "##FORMAT=<ID=GP,Number=3,Type=Float,Description=\"Phred-scaled "
+            "genotype posterior probabilities\">"))
+      throw runtime_error("could not append VCF GP format header");
 
   ostringstream version;
   version << "##source=UoO:SNPTools:hapfuseV" << PACKAGE_VERSION;
@@ -425,12 +454,6 @@ void hapfuse::write_vcf_head() {
     throw runtime_error("could not append hapfuse header");
 
   bcf_hdr_write(m_fusedVCF, m_hdr_out);
-
-  // save names to internal string vector
-  assert(m_names.size() == 0);
-  m_names.reserve(bcf_hdr_nsamples(m_hdr_out));
-  for (int i = 0; i < bcf_hdr_nsamples(m_hdr_out); ++i)
-    m_names.push_back(m_hdr_out->samples[i]);
 }
 
 void hapfuse::write_site(const Site &osite) const {
@@ -447,8 +470,9 @@ void hapfuse::write_site(const Site &osite) const {
   bcf_update_alleles_str(m_hdr_out, rec.get(), alleles.c_str());
   rec->pos = osite.pos - 1;
   rec->rid = bcf_hdr_name2id(m_hdr_out, osite.chr.c_str());
+  assert(rec->rid >= 0);
 
-  uint in = osite.hap.size() / 2;
+  size_t numSamps = osite.hap.size() / 2;
   double k = 1.0 / osite.weight;
   bool is_par = (osite.pos >= 60001 && osite.pos <= 2699520) ||
                 (osite.pos >= 154931044 && osite.pos <= 155270560);
@@ -456,13 +480,20 @@ void hapfuse::write_site(const Site &osite) const {
   vector<unsigned> gts;
   vector<float> lineGPs;
   vector<float> lineAPPs;
+  vector<double> GPs(3);
 
-  for (uint i = 0; i < in; i++) {
-    uint a, b;
-    double p0 = osite.hap[i * 2] * k, p1 = osite.hap[i * 2 + 1] * k;
-    double prr = (1 - p0) * (1 - p1), pra = (1 - p0) * p1 + p0 * (1 - p1),
-           paa = p0 * p1;
+  for (uint i = 0; i < numSamps; i++) {
+    const double p0 = osite.hap[i * 2] * k, p1 = osite.hap[i * 2 + 1] * k;
 
+    if (m_init.out_format_tags.at("APP") == true) {
+      lineAPPs.push_back(HapfuseHelper::prob2Phred(p0));
+      lineAPPs.push_back(HapfuseHelper::prob2Phred(p1));
+    }
+
+    const double prr = (1 - p0) * (1 - p1), pra = (1 - p0) * p1 + p0 * (1 - p1),
+                 paa = p0 * p1;
+
+    unsigned a, b;
     if (m_init.is_x && (male.find(m_names[i]) != male.end()) && !is_par) {
       if (prr >= paa)
         a = b = 0;
@@ -483,32 +514,32 @@ void hapfuse::write_site(const Site &osite) const {
         a = b = 1;
     }
 
-    vector<double> GPs(3);
-    GPs[0] = (1 - p0) * (1 - p1);
-    GPs[1] = (1 - p0) * p1 + p0 * (1 - p1);
-    GPs[2] = p0 * p1;
+    // defined GT
+    if (m_init.out_format_tags.at("GT") == true) {
+      gts.push_back(bcf_gt_phased(a));
+      gts.push_back(bcf_gt_phased(b));
+    }
 
-    for (auto &GP : GPs)
-      GP = HapfuseHelper::prob2Phred(GP);
+    if (m_init.out_format_tags.at("GP") == true) {
+      GPs[0] = (1 - p0) * (1 - p1);
+      GPs[1] = (1 - p0) * p1 + p0 * (1 - p1);
+      GPs[2] = p0 * p1;
 
-    p0 = HapfuseHelper::prob2Phred(p0);
-    p1 = HapfuseHelper::prob2Phred(p1);
+      for (auto &GP : GPs)
+        GP = HapfuseHelper::prob2Phred(GP);
 
-    gts.push_back(bcf_gt_phased(a));
-    gts.push_back(bcf_gt_phased(b));
-    for (auto g : GPs)
-      lineGPs.push_back(g);
-    lineAPPs.push_back(p0);
-    lineAPPs.push_back(p1);
-    //    fusedVCF << "\t" << a << "|" << b << ":" << GPs[0] << "," << GPs[1] <<
-    // ","
-    //           << GPs[2] << ":" << p0 << "," << p1;
-  }
-  bcf_update_genotypes(m_hdr_out, rec.get(), gts.data(), gts.size());
-  bcf_update_format_float(m_hdr_out, rec.get(), "GP", lineGPs.data(),
-                          lineGPs.size());
-  bcf_update_format_float(m_hdr_out, rec.get(), "APP", lineAPPs.data(),
-                          lineAPPs.size());
+      for (auto g : GPs)
+        lineGPs.push_back(g);
+    }
+  } // end numSamps
+  if (m_init.out_format_tags.at("GT") == true)
+    bcf_update_genotypes(m_hdr_out, rec.get(), gts.data(), gts.size());
+  if (m_init.out_format_tags.at("GP") == true)
+    bcf_update_format_float(m_hdr_out, rec.get(), "GP", lineGPs.data(),
+                            lineGPs.size());
+  if (m_init.out_format_tags.at("APP") == true)
+    bcf_update_format_float(m_hdr_out, rec.get(), "APP", lineAPPs.data(),
+                            lineAPPs.size());
 
   bcf_write(m_fusedVCF, m_hdr_out, rec.get());
 }
@@ -533,10 +564,10 @@ bool hapfuse::load_dir(const char *D) {
     string s = d + ptr->d_name;
 
     if (s.find(".vcf.gz") != string::npos)
-      file.push_back(s);
+      m_bcfFiles.push_back(s);
   }
 
-  sort(file.begin(), file.end());
+  sort(m_bcfFiles.begin(), m_bcfFiles.end());
   return true;
 }
 
@@ -546,21 +577,22 @@ void hapfuse::work() {
   list<Site> outputSites;
   std::future<void> outputFut;
   list<std::future<vector<Site> > > chunkFutures;
-  for (uint i = 0; i < file.size(); i++) {
+  for (uint i = 0; i < m_numInputChunks; i++) {
 
     // add chunks to the future vector
     // make sure the first chunk is loaded synchronously so that m_name can be
     // filled and the header can be written without hiccups
     if (i == 0)
       chunkFutures.push_back(
-          std::async(launch::async, &hapfuse::load_chunk, this, i, i == 0));
+          std::async(launch::async, &hapfuse::load_chunk, this, i, true));
+
     // load up a few chunks in parallel
     // make sure not to go off the end...
     else if (i == 1)
-      for (unsigned j = 0; j != 2 && j + i < file.size(); ++j)
+      for (unsigned j = 0; j != 2 && j + i < m_numInputChunks; ++j)
         chunkFutures.push_back(std::async(launch::async, &hapfuse::load_chunk,
                                           this, i + j, false));
-    else if (i + 1 < file.size())
+    else if (i + 1 < m_numInputChunks)
       chunkFutures.push_back(
           std::async(launch::async, &hapfuse::load_chunk, this, i + 1, false));
 
@@ -613,10 +645,10 @@ void hapfuse::work() {
 
     // add chunk to buffer
     merge_chunk(std::move(chunk));
-    cout << file[i] << endl;
+    cout << "Merged chunk " << i + 1 << " of " << m_numInputChunks << endl;
   }
 
-  if (file.size() > 1)
+  if (m_numInputChunks > 1)
     outputFut.get();
   for (auto li : site)
     write_site(li);
@@ -664,25 +696,4 @@ void hapfuse::merge_chunk(vector<Site> chunk) {
     for (; m < chunk.size(); ++m)
       site.insert(site.end(), std::move(chunk[m]));
   }
-}
-
-void hapfuse::document(void) {
-  cerr << "\nhapfuse v" << PACKAGE_VERSION;
-  cerr << "\njoint chunked haplotypes into chromosome wide haplotypes";
-  cerr << "\nauthor Warren W Kretzschmar @ Marchini Group @ U of Oxford";
-  cerr << "\nbased on code by Yi Wang @ Fuli Yu' Group @ BCM-HGSC";
-  cerr << "\n\nUsage:\thapfuse [options] <-o out.vcf> <VCF/BCF files to "
-          "process in order>";
-
-  cerr << "\n\n\t-o, --output <file>\tName of output file";
-
-  cerr
-      << "\n\t-O, --output-type <b|u|z|v>\tOutput file type. b: compressed "
-         "BCF, u: uncompressed BCF, z: compressed VCF, v: uncompressed VCF [v]";
-
-  cerr << "\n\t-g, --gender-file <file>\tFile that indicates which gender each "
-          "sample is. Only use for x chromosome.";
-  cerr << "\n\t\tExample: NA21522 male";
-  cerr << "\n\n";
-  exit(1);
 }

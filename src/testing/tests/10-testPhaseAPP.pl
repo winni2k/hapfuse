@@ -59,12 +59,15 @@ write_file( $inputSamps, join( "\n", @chunkSamps ) );
 my $results_vcf_wtccc = $results_vcf;
 $results_vcf_wtccc =~ s/\.vcf$/.wtccc.vcf/;
 
-$cmd = "./hapfuse -o $results_vcf_wtccc -h $inputHaps -s $inputSamps";
+my $expected_wtccc_file = $expected_file;
+$expected_wtccc_file =~ s/\.vcf$/.wtccc.vcf/;
+
+$cmd = "./hapfuse -w step -o $results_vcf_wtccc -h $inputHaps -s $inputSamps";
 print "Call: $cmd\n";
 system $cmd;
 
-compare_filter_ok( $results_vcf_wtccc, $expected_file, \&vcfComp,
-    "hapfuse phases from haplotypes and gets APPs right" );
+compare_filter_ok( $results_vcf_wtccc, $expected_wtccc_file, \&vcfComp,
+    "hapfuse phases from haplotypes" );
 
 sub vcfComp {
     my $line = shift;

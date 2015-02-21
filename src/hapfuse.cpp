@@ -576,7 +576,7 @@ void hapfuse::work() {
   vector<double> sum;
   list<Site> outputSites;
   std::future<void> outputFut;
-  list<std::future<vector<Site> > > chunkFutures;
+  list<std::future<vector<Site>>> chunkFutures;
   for (uint i = 0; i < m_numInputChunks; i++) {
 
     // add chunks to the future vector
@@ -654,6 +654,82 @@ void hapfuse::work() {
     write_site(li);
 }
 
+/*
+  finding the beginning, middle, and end of overlap according to list
+*/
+
+void hapfuse::find_overlap(vector<Site> chunk, list<Site>::iterator &first,
+                           list<Site>::iterator &mid,
+                           list<Site>::iterator &last, size_t &chunkMidIdx) {
+
+  assert(!chunk.empty());
+  auto li = site.begin();
+  size_t m = 0;
+  bool firstFound = false;
+  vector<size_t> overlapChunkSiteNums;
+  overlapChunkSiteNums.reserve(chunk.size());
+  while (li != site.end()) {
+
+    if (m == chunk.size())
+      break;
+
+    // chunk site is before current site
+    // and did not match a previous site
+    if (chunk[m].pos < li->pos) {
+      if (!m_init.unmatchedSitesOK)
+        throw std::runtime_error("Encountered site in overlap region that "
+                                 "does not exist in both chunks: " +
+                                 chunk[m].chr + ":" + to_string(chunk[m].pos) +
+                                 " " + chunk[m].all[0] + " " + chunk[m].all[1]);
+      if (!firstFound) {
+        first = li;
+        --first;
+      }
+      ++m;
+    }
+
+    // chunk site matches list site and needs to be merged in
+    else if (chunk[m] == *li) {
+      overlapChunkSiteNums.push_back(m);
+      ++m;
+      ++li;
+    }
+
+    // chunk site might match a later site in site
+    else
+      ++li;
+  }
+
+  last = li;
+
+  assert(!overlapChunkSiteNums.empty());
+  chunkMidIdx = (overlapChunkSiteNums.size() - 1) >> 1;
+  assert(overlapChunkSiteNums.size() > chunkMidIdx);
+
+  // go search for that halfway point again...
+  mid = first;
+  while (*mid != chunk[chunkMidIdx])
+    ++mid;
+}
+
+/* How merging works
+   . = sites kept
+   x = deleted sites
+   | = interval between sites at which to cut
+
+   STEP
+
+   Only the number of overlap sites are counted
+   The old/left haplotypes are used for the center site
+   if the number of overlap sites is odd.
+   The example assumes that non-overlapping sites
+   in the overlap interval are allowed
+
+   Diplotype 1: . . . .. .|xx x
+   Diplotype 2:      xx xx| .  . . . .
+
+*/
+
 void hapfuse::merge_chunk(vector<Site> chunk) {
 
   if (site.empty()) {
@@ -661,39 +737,83 @@ void hapfuse::merge_chunk(vector<Site> chunk) {
     for (size_t m = 0; m != chunk.size(); ++m)
       site.insert(site.end(), std::move(chunk[m]));
   } else {
-    auto li = site.begin();
-    size_t m = 0;
-    while (li != site.end()) {
 
-      // exit if we have merged in all chunk sites
-      if (m == chunk.size())
-        break;
+    if (m_init.ws == HapfuseHelper::WeightingStyle::STEP) {
+      auto start = site.begin();
+      auto mid = site.begin();
+      auto last = site.begin();
+      size_t chunkMidIdx = 0;
+      find_overlap(chunk, start, mid, last, chunkMidIdx);
 
-      // chunk site is before current site
-      // and did not match a previous site
-      if (chunk[m].pos < li->pos) {
-        site.insert(li, std::move(chunk[m]));
-        ++m;
-      }
-      // chunk site matches list site and needs to be merged in
-      else if (chunk[m] == *li) {
-        li->weight += chunk[m].weight;
+      // now delete all sites after halfway point
+      auto deleteMe = mid;
+      ++deleteMe;
+      if (deleteMe != site.end())
+        site.erase(deleteMe, site.end());
 
-        double *p = &(li->hap[0]), *q = &(chunk[m].hap[0]);
-        for (uint j = 0; j < numSamps() * 2; j++)
-          p[j] += q[j];
-
-        ++m;
-        ++li;
-      }
-
-      // chunk site might match a later site in site
-      else
-        ++li;
+      // and now insert all sites from chunk after halfway point
+      size_t m = chunkMidIdx + 1;
+      for (; m < chunk.size(); ++m)
+        site.insert(site.end(), std::move(chunk[m]));
     }
-    // load up all the remaining sites in chunk that are past the last site in
-    // site
-    for (; m < chunk.size(); ++m)
-      site.insert(site.end(), std::move(chunk[m]));
+
+    // alternative way of merging
+    if (m_init.ws == HapfuseHelper::WeightingStyle::AVERAGE ||
+        m_init.ws == HapfuseHelper::WeightingStyle::LINEAR) {
+      auto li = site.begin();
+      size_t m = 0;
+      bool firstOverlapFound = false;
+      while (li != site.end()) {
+
+        // exit if we have merged in all chunk sites
+        if (m == chunk.size())
+          break;
+
+        // chunk site is before current site
+        // and did not match a previous site
+        if (chunk[m].pos < li->pos) {
+          if (!m_init.unmatchedSitesOK)
+            throw std::runtime_error("Encountered site in overlap region that "
+                                     "does not exist in both chunks: " +
+                                     chunk[m].chr + ":" +
+                                     to_string(chunk[m].pos) + " " +
+                                     chunk[m].all[0] + " " + chunk[m].all[1]);
+          site.insert(li, std::move(chunk[m]));
+          ++m;
+        }
+        // chunk site matches list site and needs to be merged in
+        else if (chunk[m] == *li) {
+          // just measure extent of overlap and fuse together later
+          // if we are just cutting overlap in half
+
+          li->weight += chunk[m].weight;
+
+          double *p = &(li->hap[0]), *q = &(chunk[m].hap[0]);
+          for (uint j = 0; j < numSamps() * 2; j++)
+            p[j] += q[j];
+
+          ++m;
+          ++li;
+          firstOverlapFound = true;
+        }
+
+        // chunk site might match a later site in site
+        else {
+          if (firstOverlapFound)
+            if (!m_init.unmatchedSitesOK)
+              throw std::runtime_error(
+                  "Encountered site in overlap region that "
+                  "does not exist in both chunks: " +
+                  chunk[m].chr + ":" + to_string(chunk[m].pos) + " " +
+                  chunk[m].all[0] + " " + chunk[m].all[1]);
+
+          ++li;
+        }
+      }
+      // load up all the remaining sites in chunk that are past the last site in
+      // site
+      for (; m < chunk.size(); ++m)
+        site.insert(site.end(), std::move(chunk[m]));
+    }
   }
 }

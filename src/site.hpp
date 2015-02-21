@@ -12,8 +12,7 @@ public:
   double weight;
   std::vector<std::string> all;
 
-  void init(std::string chr, uint32_t pos,
-            std::vector<std::string> alls) {
+  void init(std::string chr, uint32_t pos, std::vector<std::string> alls) {
     this->chr = std::move(chr);
     this->pos = pos;
     for (auto &a : alls)
@@ -30,6 +29,7 @@ public:
         return false;
     return true;
   }
+  bool operator!=(const Site &lhs) { return !(this->operator==(lhs)); }
 
   bool empty() {
     if (chr.empty() || all.empty())

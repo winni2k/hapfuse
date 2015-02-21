@@ -41,6 +41,8 @@
 #define EPSILON 0.001 // precision of input floats
 
 namespace HapfuseHelper {
+enum class WeightingStyle { AVERAGE, LINEAR, STEP };
+
 struct init {
   bool is_x = false;
   std::string outputFile = "";
@@ -49,9 +51,9 @@ struct init {
   std::string wtcccHapFilesFile = "";
   std::string wtcccSampFilesFile = "";
   std::vector<std::string> cmdLineInputFiles;
-  std::unordered_map<std::string, bool> out_format_tags{ { "GT", false },
-                                                         { "GP", false },
-                                                         { "APP", false } };
+  std::unordered_map<std::string, bool> out_format_tags{
+      {"GT", false}, {"GP", false}, {"APP", false}};
+  bool unmatchedSitesOK = false;
 };
 
 void load_files_from_file(const std::string &fileFile,
@@ -64,8 +66,6 @@ double prob2Phred(double prob);
 double phred2Prob(double phred);
 
 enum class fileType { WTCCC, BCF };
-
-enum class WeightingStyle { AVERAGE, LINEAR, STEP };
 }
 
 class hapfuse {
@@ -90,6 +90,12 @@ private:
   std::vector<Site> load_chunk_bcf(const std::string &inFile, bool first);
 
   std::tuple<float, float> extractGP(float *gp, int &gtA, int &gtB);
+
+  void find_overlap(std::vector<Site> chunk,
+                             std::list<Site>::iterator &first,
+                             std::list<Site>::iterator &mid,
+                             std::list<Site>::iterator &last,
+                             size_t &chunkMidIdx);
   void merge_chunk(std::vector<Site> chunk);
 
   htsFile *m_fusedVCF = NULL;

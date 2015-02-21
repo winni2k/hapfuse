@@ -43,15 +43,14 @@ int main(int argc, char **argv) {
     vector<string> out_format_tags;
 
     static struct option loptions[] = {
-      { "gender-file", required_argument, nullptr, 'g' },
-      { "output", required_argument, nullptr, 'o' },
-      { "output-type", required_argument, nullptr, 'O' },
-      { "ligation-method", required_argument, nullptr, 'w' },
-      { "wtccc-hap-files", required_argument, nullptr, 'h' },
-      { "wtccc-sample-files", required_argument, nullptr, 's' },
-      { "out_format_tags", required_argument, nullptr, 't' },
-      { 0, 0, 0, 0 }
-    };
+        {"gender-file", required_argument, nullptr, 'g'},
+        {"output", required_argument, nullptr, 'o'},
+        {"output-type", required_argument, nullptr, 'O'},
+        {"ligation-method", required_argument, nullptr, 'w'},
+        {"wtccc-hap-files", required_argument, nullptr, 'h'},
+        {"wtccc-sample-files", required_argument, nullptr, 's'},
+        {"out_format_tags", required_argument, nullptr, 't'},
+        {0, 0, 0, 0}};
 
     while ((opt = getopt_long(argc, argv, "d:g:o:O:w:h:s:t:", loptions,
                               nullptr)) >= 0) {
@@ -72,6 +71,8 @@ int main(int argc, char **argv) {
       case 'w':
         if (string(optarg) == "linear")
           init.ws = HapfuseHelper::WeightingStyle::LINEAR;
+        else if (string(optarg) == "step")
+          init.ws = HapfuseHelper::WeightingStyle::STEP;
         else
           throw runtime_error("Unexpected option argument -w " +
                               string(optarg));
@@ -110,8 +111,7 @@ int main(int argc, char **argv) {
       try {
         auto val = init.out_format_tags.at(tag);
         val = true;
-      }
-      catch (std::out_of_range &e) {
+      } catch (std::out_of_range &e) {
         cerr << "Encountered unexpected output tag [" << tag << endl;
       }
     }
@@ -129,8 +129,7 @@ int main(int argc, char **argv) {
       hf.gender(genderFile.c_str());
 
     hf.work();
-  }
-  catch (std::exception &e) {
+  } catch (std::exception &e) {
     cerr << "Error: " << e.what() << endl;
     exit(1);
   }

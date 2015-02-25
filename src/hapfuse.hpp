@@ -42,6 +42,7 @@
 
 namespace HapfuseHelper {
 enum class WeightingStyle { AVERAGE, LINEAR, STEP };
+enum class fileType { WTCCC, BCF };
 
 struct init {
   bool is_x = false;
@@ -70,7 +71,11 @@ void wtccc_hap_order(std::vector<std::string> &wtccc_hap_files,
 
 void bcf_order(std::vector<std::string> &bcf_files);
 
-enum class fileType { WTCCC, BCF };
+std::string::size_type tokenize_partial(std::string &str,
+                                        std::size_t n_max_tokens,
+                                        std::vector<std::string> &tokens);
+int tokenize_from(const std::string &str, std::string::size_type p_last,
+                  std::vector<std::string> &tokens);
 }
 
 class hapfuse {

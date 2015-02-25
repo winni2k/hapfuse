@@ -131,6 +131,33 @@ void bcf_order(vector<string> &bcf_files) {
     ++fileNum;
   }
 }
+
+// this returns a vector filled with the first n_max_tokens -1 tokens of str
+// the last token contains the rest of str
+string::size_type tokenize_partial(string &str, size_t n_max_tokens,
+                                   vector<string> &tokens) {
+  tokens.clear();
+  tokens.reserve(n_max_tokens);
+  string::size_type p_last = str.find_first_not_of(" \t", 0);
+  string::size_type p_curr = str.find_first_of(" \t", p_last);
+  if (n_max_tokens > 1)
+    while ((string::npos != p_curr || string::npos != p_last) &&
+           tokens.size() + 1 != n_max_tokens) {
+      tokens.push_back(str.substr(p_last, p_curr - p_last));
+      p_last = str.find_first_not_of(" \t", p_curr);
+      p_curr = str.find_first_of(" \t", p_last);
+    }
+
+  // push in string as last token
+  tokens.push_back(std::move(str));
+  return p_last;
+}
+
+int tokenize_from(const string &str, string::size_type p_last,
+                  vector<string> &tokens) {
+  string new_str = str.substr(p_last, string::npos);
+  return sutils::tokenize(new_str, tokens);
+}
 }
 
 hapfuse::hapfuse(HapfuseHelper::init init)
@@ -665,14 +692,20 @@ void hapfuse::work() {
           std::async(launch::async, &hapfuse::load_chunk, this, i + 1, false));
 
     assert(!chunkFutures.empty());
+    cout << "Waiting on chunk to load..." << flush;
     vector<Site> chunk = std::move(chunkFutures.front().get());
+    cout << " done" << endl;
+
     chunkFutures.pop_front();
 
     // write out any sites that have previously been loaded,
     // but are not in the chunk we just loaded
     if (!site.empty()) {
-      if (i > 1)
+      if (i > 1) {
+        cout << "Waiting for merged sites to be written.." << flush;
         outputFut.get();
+        cout << " done" << endl;
+      }
       outputSites.clear();
 
       // find first site with the same position as first chunk position
@@ -716,8 +749,11 @@ void hapfuse::work() {
     cout << "Merged chunk " << i + 1 << " of " << m_numInputChunks << endl;
   }
 
-  if (m_numInputChunks > 1)
+  if (m_numInputChunks > 1) {
+    cout << "Waiting for merged sites to be written.." << flush;
     outputFut.get();
+    cout << " done" << endl;
+  }
   for (auto li : site)
     write_site(li);
 }

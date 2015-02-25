@@ -1,4 +1,4 @@
-AC_INIT([hapfuse], [0.11], [wkretzsch@gmail.com])
+AC_INIT([hapfuse], [0.12], [wkretzsch@gmail.com])
 AM_INIT_AUTOMAKE([-Wall -Werror foreign])
 
 # Use -O3 as default optimization level

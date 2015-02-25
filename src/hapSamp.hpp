@@ -11,6 +11,7 @@
 
 #include "site.hpp"
 #include "utils.hpp"
+#include "hapfuse.hpp"
 
 class HapSamp {
 
@@ -20,6 +21,7 @@ private:
   std::vector<std::string> m_samps;
 
   std::string m_chrom;
+  const bool m_multiSpaceAllowed = false;
 
   Site m_firstSite;
   unsigned m_linesRead = 0;
@@ -28,7 +30,8 @@ private:
   void FillFirstSite();
 
 public:
-  HapSamp(std::string hapFile, const std::string &sampFile);
+  HapSamp(std::string hapFile, const std::string &sampFile,
+          bool multiSpaceAllowed = false);
 
   unsigned GetFirstPos();
   Site GetSite();

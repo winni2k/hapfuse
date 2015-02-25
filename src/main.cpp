@@ -24,7 +24,7 @@ int main(int argc, char **argv) {
       << "\n\t-w --ligation-method <string>\tLigation method"
       << "\n\t-h --wtccc-hap-files <file>\tFile containing WTCCC style hap "
          "file names, one per line"
-      << "\n\t-h --wtccc-sample-files <file>\tFile containing WTCCC style "
+      << "\n\t-s --wtccc-sample-files <file>\tFile containing WTCCC style "
          "sample file names, one per line"
       << "\n\t-t --out_format_tags <string>\tComma separated string of output "
          "format tags (no spaces). Possible tags: GT, GP, APP"

@@ -82,6 +82,9 @@ class hapfuse {
 private:
   const HapfuseHelper::init m_init;
   size_t m_numInputChunks;
+  const bool m_out_GT = false;
+  const bool m_out_GP = false;
+  const bool m_out_APP = false;
 
   list<Site> site;
   std::vector<std::string> m_bcfFiles; // only used for bcfs

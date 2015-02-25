@@ -161,7 +161,11 @@ int tokenize_from(const string &str, string::size_type p_last,
 }
 
 hapfuse::hapfuse(HapfuseHelper::init init)
-    : m_init(std::move(init)), m_bcfFiles(m_init.cmdLineInputFiles) {
+    : m_init(std::move(init)),
+      m_out_GT(m_init.out_format_tags.at("GT") == true),
+      m_out_GP(m_init.out_format_tags.at("GP") == true),
+      m_out_APP(m_init.out_format_tags.at("APP") == true),
+      m_bcfFiles(m_init.cmdLineInputFiles) {
 
   // Input files will be WTCCC style
   if (!m_init.wtcccHapFilesFile.empty()) {
@@ -523,20 +527,20 @@ void hapfuse::write_vcf_head() {
   assert(m_hdr_out);
   assert(m_fusedVCF);
 
-  if (m_init.out_format_tags.at("GT") == true)
+  if (m_out_GT == true)
     if (bcf_hdr_append(
             m_hdr_out,
             "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">"))
       throw runtime_error("could not append VCF GT format header");
 
-  if (m_init.out_format_tags.at("APP") == true)
+  if (m_out_APP == true)
     if (bcf_hdr_append(m_hdr_out,
                        "##FORMAT=<ID=APP,Number=2,Type=Float,Description="
                        "\"Phred-scaled allelic probability, "
                        "P(Allele=1|Haplotype)\">"))
       throw runtime_error("Could not append VCF APP format header");
 
-  if (m_init.out_format_tags.at("GP") == true)
+  if (m_out_GP == true)
     if (bcf_hdr_append(
             m_hdr_out,
             "##FORMAT=<ID=GP,Number=3,Type=Float,Description=\"Phred-scaled "
@@ -580,7 +584,7 @@ void hapfuse::write_site(const Site &osite) const {
   for (uint i = 0; i < numSamps; i++) {
     const double p0 = osite.hap[i * 2] * k, p1 = osite.hap[i * 2 + 1] * k;
 
-    if (m_init.out_format_tags.at("APP") == true) {
+    if (m_out_APP == true) {
       lineAPPs.push_back(HapfuseHelper::prob2Phred(p0));
       lineAPPs.push_back(HapfuseHelper::prob2Phred(p1));
     }
@@ -610,12 +614,12 @@ void hapfuse::write_site(const Site &osite) const {
     }
 
     // defined GT
-    if (m_init.out_format_tags.at("GT") == true) {
+    if (m_out_GT == true) {
       gts.push_back(bcf_gt_phased(a));
       gts.push_back(bcf_gt_phased(b));
     }
 
-    if (m_init.out_format_tags.at("GP") == true) {
+    if (m_out_GP == true) {
       GPs[0] = (1 - p0) * (1 - p1);
       GPs[1] = (1 - p0) * p1 + p0 * (1 - p1);
       GPs[2] = p0 * p1;
@@ -627,12 +631,12 @@ void hapfuse::write_site(const Site &osite) const {
         lineGPs.push_back(g);
     }
   } // end numSamps
-  if (m_init.out_format_tags.at("GT") == true)
+  if (m_out_GT == true)
     bcf_update_genotypes(m_hdr_out, rec.get(), gts.data(), gts.size());
-  if (m_init.out_format_tags.at("GP") == true)
+  if (m_out_GP == true)
     bcf_update_format_float(m_hdr_out, rec.get(), "GP", lineGPs.data(),
                             lineGPs.size());
-  if (m_init.out_format_tags.at("APP") == true)
+  if (m_out_APP == true)
     bcf_update_format_float(m_hdr_out, rec.get(), "APP", lineAPPs.data(),
                             lineAPPs.size());
 
@@ -727,7 +731,6 @@ void hapfuse::work() {
       for (uint m = 0; m < chunk.size(); m++)
         if (*li == chunk[m]) {
           double *p = &(li->hap[0]), *q = &(chunk[m].hap[0]);
-
           for (uint j = 0; j < numSamps(); j++) {
             sum[j * 2] += p[j * 2] * q[j * 2] + p[j * 2 + 1] * q[j * 2 + 1];
             sum[j * 2 + 1] += p[j * 2] * q[j * 2 + 1] + p[j * 2 + 1] * q[j * 2];

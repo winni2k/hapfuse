@@ -65,6 +65,11 @@ double prob2Phred(double prob);
 // converts a phred scaled probability back to a probability
 double phred2Prob(double phred);
 
+void wtccc_hap_order(std::vector<std::string> &wtccc_hap_files,
+                     std::vector<std::string> &wtccc_samp_files);
+
+void bcf_order(std::vector<std::string> &bcf_files);
+
 enum class fileType { WTCCC, BCF };
 }
 
@@ -91,11 +96,9 @@ private:
 
   std::tuple<float, float> extractGP(float *gp, int &gtA, int &gtB);
 
-  void find_overlap(std::vector<Site> chunk,
-                             std::list<Site>::iterator &first,
-                             std::list<Site>::iterator &mid,
-                             std::list<Site>::iterator &last,
-                             size_t &chunkMidIdx);
+  void find_overlap(std::vector<Site> chunk, std::list<Site>::iterator &first,
+                    std::list<Site>::iterator &mid,
+                    std::list<Site>::iterator &last, size_t &chunkMidIdx);
   void merge_chunk(std::vector<Site> chunk);
 
   htsFile *m_fusedVCF = NULL;

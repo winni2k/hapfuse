@@ -98,19 +98,10 @@ void wtccc_hap_order(vector<string> &wtccc_hap_files,
     tmp_wtccc_files.push_back(std::move(wtccc_samp_files[o.second]));
   swap(tmp_wtccc_files, wtccc_samp_files);
 }
-}
 
 void bcf_order(vector<string> &bcf_files) {
 
   assert(!bcf_files.empty());
-
-  std::unique_ptr<htsFile, void (*)(htsFile *)> fp(
-      hts_open(inFile.c_str(), "r"), [](htsFile *f) { hts_close(f); });
-  if (!fp)
-    throw myException("Could not open file: " + inFile);
-
-  std::unique_ptr<bcf_hdr_t, void (*)(bcf_hdr_t *)> hdr(
-      bcf_hdr_read(fp.get()), [](bcf_hdr_t *h) { bcf_hdr_destroy(h); });
 
   std::unique_ptr<bcf1_t, void (*)(bcf1_t *)> rec(
       bcf_init1(), [](bcf1_t *b) { bcf_destroy1(b); });
@@ -121,6 +112,13 @@ void bcf_order(vector<string> &bcf_files) {
 
   size_t fileNum = 0;
   for (auto file : bcf_files) {
+    std::unique_ptr<htsFile, void (*)(htsFile *)> fp(
+        hts_open(file.c_str(), "r"), [](htsFile *f) { hts_close(f); });
+    if (!fp)
+      throw myException("Could not open file: " + file);
+
+    std::unique_ptr<bcf_hdr_t, void (*)(bcf_hdr_t *)> hdr(
+        bcf_hdr_read(fp.get()), [](bcf_hdr_t *h) { bcf_hdr_destroy(h); });
 
     if (bcf_read1(fp.get(), hdr.get(), rec.get()) < 0)
       throw runtime_error("BCF file [" + file + "] seems to have no entries");
@@ -132,6 +130,7 @@ void bcf_order(vector<string> &bcf_files) {
     bcf_first_pos.push_back(make_pair(rec->pos + 1, fileNum));
     ++fileNum;
   }
+}
 }
 
 hapfuse::hapfuse(HapfuseHelper::init init)

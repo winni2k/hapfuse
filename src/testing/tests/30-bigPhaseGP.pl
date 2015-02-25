@@ -1,4 +1,7 @@
 #!/bin/perl
+use strict;
+use warnings;
+
 use Test::More;
 use Test::Files;
 use File::Spec;
@@ -42,4 +45,5 @@ system
 
 compare_ok( $expectedLegend, $resultsLegend, "extracted correct sites" );
 compare_ok( $expectedHap,    $resultsHap,    "hapfuse phases" );
+
 

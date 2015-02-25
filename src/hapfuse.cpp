@@ -70,6 +70,68 @@ double phred2Prob(double phred) {
   else
     return pow(10, -phred / 10);
 }
+
+void wtccc_hap_order(vector<string> &wtccc_hap_files,
+                     vector<string> &wtccc_samp_files) {
+  assert(wtccc_hap_files.size() == wtccc_samp_files.size());
+
+  // fill vector with order and first position
+  vector<pair<unsigned, size_t>> wtccc_first_pos;
+  wtccc_first_pos.reserve(wtccc_hap_files.size());
+  for (size_t fileNum = 0; fileNum < wtccc_hap_files.size(); ++fileNum) {
+    HapSamp wtccc(wtccc_hap_files[fileNum], wtccc_samp_files[fileNum]);
+    wtccc_first_pos.push_back(make_pair(wtccc.GetFirstPos(), fileNum));
+  }
+
+  sort(wtccc_first_pos.begin(), wtccc_first_pos.end());
+
+  // sort hap files
+  vector<string> tmp_wtccc_files;
+  tmp_wtccc_files.reserve(wtccc_hap_files.size());
+  for (auto o : wtccc_first_pos)
+    tmp_wtccc_files.push_back(std::move(wtccc_hap_files[o.second]));
+  swap(tmp_wtccc_files, wtccc_hap_files);
+
+  // do same for samples
+  tmp_wtccc_files.clear();
+  for (auto o : wtccc_first_pos)
+    tmp_wtccc_files.push_back(std::move(wtccc_samp_files[o.second]));
+  swap(tmp_wtccc_files, wtccc_samp_files);
+}
+}
+
+void bcf_order(vector<string> &bcf_files) {
+
+  assert(!bcf_files.empty());
+
+  std::unique_ptr<htsFile, void (*)(htsFile *)> fp(
+      hts_open(inFile.c_str(), "r"), [](htsFile *f) { hts_close(f); });
+  if (!fp)
+    throw myException("Could not open file: " + inFile);
+
+  std::unique_ptr<bcf_hdr_t, void (*)(bcf_hdr_t *)> hdr(
+      bcf_hdr_read(fp.get()), [](bcf_hdr_t *h) { bcf_hdr_destroy(h); });
+
+  std::unique_ptr<bcf1_t, void (*)(bcf1_t *)> rec(
+      bcf_init1(), [](bcf1_t *b) { bcf_destroy1(b); });
+
+  // fill vector with order and first position
+  vector<pair<unsigned, size_t>> bcf_first_pos;
+  bcf_first_pos.reserve(bcf_files.size());
+
+  size_t fileNum = 0;
+  for (auto file : bcf_files) {
+
+    if (bcf_read1(fp.get(), hdr.get(), rec.get()) < 0)
+      throw runtime_error("BCF file [" + file + "] seems to have no entries");
+
+    // get the first five columns
+    bcf_unpack(rec.get(), BCF_UN_STR);
+
+    // site will store the site's information
+    bcf_first_pos.push_back(make_pair(rec->pos + 1, fileNum));
+    ++fileNum;
+  }
 }
 
 hapfuse::hapfuse(HapfuseHelper::init init)
@@ -92,7 +154,11 @@ hapfuse::hapfuse(HapfuseHelper::init init)
           "-h and -H need to contain same number of files");
 
     m_numInputChunks = m_wtcccHapFiles.size();
+
+    // order input hap files by first position
+    HapfuseHelper::wtccc_hap_order(m_wtcccHapFiles, m_wtcccSampFiles);
   }
+
   // else load BCFs from command line
   else {
     m_inputFileType = HapfuseHelper::fileType::BCF;
@@ -100,6 +166,9 @@ hapfuse::hapfuse(HapfuseHelper::init init)
       throw std::runtime_error("No input files given");
 
     m_numInputChunks = m_bcfFiles.size();
+
+    // order input BCFs by first position
+    HapfuseHelper::bcf_order(m_bcfFiles);
   }
 
   // if multiple input files are given then error out

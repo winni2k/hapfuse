@@ -1,7 +1,7 @@
 #!/bin/perl
 use strict;
 use warnings;
-use Test::More tests => 3;
+use Test::More tests => 4;
 use Test::Files;
 use File::Spec;
 use File::Path qw(make_path remove_tree);
@@ -68,6 +68,20 @@ system $cmd;
 
 compare_filter_ok( $results_vcf_wtccc, $expected_wtccc_file, \&vcfComp,
     "hapfuse phases from haplotypes" );
+
+# Let's also test out of order chunk phasing works
+write_file( $inputHaps, join( "\n", reverse @chunkHaps ) );
+
+my $results_vcf_wtccc_rev = $results_vcf;
+$results_vcf_wtccc_rev =~ s/\.vcf$/.wtccc.rev.vcf/;
+
+$cmd =
+  "./hapfuse -w step -o $results_vcf_wtccc_rev -h $inputHaps -s $inputSamps";
+print "Call: $cmd\n";
+system $cmd;
+
+compare_filter_ok( $results_vcf_wtccc_rev, $expected_wtccc_file, \&vcfComp,
+    "hapfuse phases from haplotypes, chunks in reverse order" );
 
 sub vcfComp {
     my $line = shift;

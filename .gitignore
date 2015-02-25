@@ -1,5 +1,5 @@
 *.gch
 *.o
 bin
-testing/results
+src/testing/results/
 *#

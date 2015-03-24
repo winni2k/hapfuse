@@ -45,4 +45,40 @@ and saving as gzip compressed BCF
     file3.sample
 
     hapfuse -h hap.files -H sample.files -Ob -o fused.bcf.gz
+o
+## Description
+
+Hapfuse ligates overlapping haplotype chunks with identical samples
+by matching haplotypes at overlap sites.  The -o option is
+required. Defaults are given in []. If VCF/BCF files are given on
+the command line, then hapfuse assumes that the VCF/BCF files
+contain haplotype chunks to ligate.  WTCCC style haplotype chunks
+can be provided via the -h and -s arguments. The input and output
+format tags are restricted to 'GT' when using the -h and -s
+arguments.
+
+### Ligation methods
+
+The 'ligation method' is the method used to determine the diplotype
+of a sample at overlapping chunk sites.
+
+#### step
+
+The 'step' method discards the outer half of a chunk's overlap
+region haplotypes when determining the diplotype of an overlap
+region.  This is the most commonly used method for ligating 
+haplotypes.
+
+#### average
+
+The 'average' method uses the average of a sample's two overlapping
+diplotypes to determine the new diplotypes. This is the method that
+SNPTools::hapfuse uses, but it only makes sense when using GP or APP
+fields.
+
+#### linear
+
+The 'linear' method is experimental.  It is the same as average, but
+it gives more weight to diplotypes that are closer to a chunk's
+center. 
 

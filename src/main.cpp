@@ -9,29 +9,37 @@ int main(int argc, char **argv) {
 
   ostringstream documentation;
   documentation
-      << "\nhapfuse v" << PACKAGE_VERSION
-      << "\nJoins chunked haplotypes into chromosome wide haplotypes"
-      << "\n\nAuthor: Warren W Kretzschmar @ Marchini Group @ U of Oxford"
-      << "\nBased on code by Yi Wang @ Fuli Yu' Group @ BCM-HGSC"
-      << "\n\nUsage:\thapfuse [options] <-o output_file> [VCF/BCF files to "
-         "process]"
-      << "\n\n\t-o, --output <file>\t\tName of output file"
-      << "\n\t-O, --output-type <b|u|z|v>\tOutput file type. b: compressed "
-         "BCF, u: uncompressed BCF, z: compressed VCF, v: uncompressed VCF [v]"
-      << "\n\t-g, --gender-file <file>\tFile that indicates which gender each "
-         "sample is. Only use for x chromosome."
-      << "\n\t\tExample: NA21522 male"
-      << "\n\t-w --ligation-method <string>\tLigation method. One of \"linear\", \"step\", or \"average\""
-      << "\n\t-h --wtccc-hap-files <file>\tFile containing WTCCC style hap "
-         "file names, one per line"
-      << "\n\t-s --wtccc-sample-files <file>\tFile containing WTCCC style "
-         "sample file names, one per line"
-      << "\n\t-t --out_format_tags <string>\tComma separated string of output "
-         "format tags (no spaces). Possible tags: GT, GP, APP"
-      << "\n\t-T --in_format_tags <string>\tComma separated string of input "
-         "format tags (no spaces). Possible tags: GT, GP, APP"
-      << "\n\n";
-
+      << "\n"
+         "Program: hapfuse\n"
+         "Version: " << PACKAGE_VERSION
+      << "\n\n"
+         "Author:  Warren W Kretzschmar @ Marchini Group @ Univ. of Oxford.\n"
+         "         Based on code by Yi Wang @ Fuli Yu Group @ BCM-HGSC.\n\n"
+         "Usage: hapfuse [options] <-o output_file> <VCF/BCF files to "
+         "process>\n\n"
+         "    -o, --output <file> [] - required argument\n"
+         "        Name of output file\n\n"
+         "    -O, --output-type <b|u|z|v> [v]\n"
+         "        Output file type. b: compressed BCF, u: uncompressed BCF,\n"
+         "        z: compressed VCF, v: uncompressed VCF\n\n"
+         "    -g, --gender-file <file> []\n"
+         "        File that indicates which gender each sample is. Only used "
+         "        for x chromosome.\n"
+         "            Example: NA21522 male\n\n"
+         "    -w --ligation-method <string> ['step']\n"
+         "        Ligation method. One of 'step', 'linear', or 'average'\n\n"
+         "    -h --wtccc-hap-files <file> []\n"
+         "        File containing WTCCC style hap file names, one per line\n\n"
+         "    -s --wtccc-sample-files <file> []\n"
+         "        File containing WTCCC style sample file names, one per\n"
+         "        line\n\n"
+         "    -t --out_format_tags <string> [GT,GP,APP]\n"
+         "        Comma separated string of output format tags (no spaces).\n"
+         "        Possible tags: GT, GP, APP\n\n"
+         "    -T --in_format_tags <string> [GT,GP,APP]\n"
+         "        Comma separated string of input format tags (no spaces).\n"
+         "        Possible tags: GT, GP, APP\n\n"
+         "For details, see README.md\n";
   if (argc < 3) {
     cerr << documentation.str();
     exit(1);

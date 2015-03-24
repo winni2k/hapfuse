@@ -411,8 +411,9 @@ vector<Site> hapfuse::load_chunk_bcf(const string &inFile, bool first) {
     site.all.push_back(a1);
     site.all.push_back(a2);
 
-    if(!m_in_GT)
-        throw runtime_error("Need to specify input GT tag if fusing BCF/VCF files");
+    if (!m_in_GT)
+      throw runtime_error(
+          "Need to specify input GT tag if fusing BCF/VCF files");
 
     if (m_in_GT && !bcf_get_fmt(hdr.get(), rec.get(), "GT"))
       throw std::runtime_error("expected GT field in VCF");
@@ -577,20 +578,6 @@ void hapfuse::write_vcf_head(vector<string> names, const string &chrom) {
 
 void hapfuse::write_site(const Site &osite) const {
 
-  assert(m_hdr_out);
-  assert(m_fusedVCF);
-  // fill empty record with data and then print
-  std::unique_ptr<bcf1_t, void (*)(bcf1_t *)> rec(
-      bcf_init1(), [](bcf1_t *b) { bcf_destroy1(b); });
-  string alleles;
-  for (auto a : osite.all)
-    alleles += a + ",";
-  alleles.pop_back();
-  bcf_update_alleles_str(m_hdr_out, rec.get(), alleles.c_str());
-  rec->pos = osite.pos - 1;
-  rec->rid = bcf_hdr_name2id(m_hdr_out, osite.chr.c_str());
-  assert(rec->rid >= 0);
-
   size_t numSamps = osite.hap.size() / 2;
   double k = 1.0 / osite.weight;
   bool is_par = (osite.pos >= 60001 && osite.pos <= 2699520) ||
@@ -651,6 +638,32 @@ void hapfuse::write_site(const Site &osite) const {
         lineGPs.push_back(g);
     }
   } // end numSamps
+
+  if (m_fusedVCF != nullptr) {
+    write_bcf_site(osite, gts, lineGPs, lineAPPs);
+  } else if (false) {
+      // need to fill with call to write_wtccc_site
+  } else
+    throw runtime_error("No output file available!");
+}
+
+void hapfuse::write_bcf_site(const Site &osite, const vector<unsigned> &gts,
+                             const vector<float> &lineGPs,
+                             const vector<float> &lineAPPs) const {
+  assert(m_hdr_out);
+
+  // fill empty record with data and then print
+  std::unique_ptr<bcf1_t, void (*)(bcf1_t *)> rec(
+      bcf_init1(), [](bcf1_t *b) { bcf_destroy1(b); });
+  string alleles;
+  for (auto a : osite.all)
+    alleles += a + ",";
+  alleles.pop_back();
+  bcf_update_alleles_str(m_hdr_out, rec.get(), alleles.c_str());
+  rec->pos = osite.pos - 1;
+  rec->rid = bcf_hdr_name2id(m_hdr_out, osite.chr.c_str());
+  assert(rec->rid >= 0);
+
   if (m_out_GT == true)
     bcf_update_genotypes(m_hdr_out, rec.get(), gts.data(), gts.size());
   if (m_out_GP == true)

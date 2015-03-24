@@ -136,6 +136,10 @@ private:
     for (auto s : outSites)
       write_site(s);
   }
+  void write_bcf_site(const Site &osite, const std::vector<unsigned> &gts,
+                      const std::vector<float> &lineGPs,
+                      const std::vector<float> &lineAPPs) const;
+  void write_wtccc_site(const Site &osite) const;
 
 public:
   static void document(void);

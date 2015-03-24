@@ -23,7 +23,8 @@ my $testTag = 'test40';
 my $resultsDir = "results/$testTag";
 make_path($resultsDir);
 my $expectedHap =
-  File::Spec->catfile( $sd, q/samples/, $testTag, "$testTag.ligated.i2.flip.hap" );
+  File::Spec->catfile( $sd, q/samples/, $testTag,
+    "$testTag.ligated.i2.flip.hap" );
 my $expectedLegend =
   File::Spec->catfile( $sd, q/samples/, $testTag,
     "$testTag.ligated.i2.legend" );
@@ -60,21 +61,33 @@ system "vcftools --vcf $results_vcf --IMPUTE --out ${resultsDir}/$resultsName"
 compare_ok( $expectedLegend, $resultsLegend, "extracted correct sites" );
 compare_ok( $expectedHap,    $resultsHap,    "hapfuse phases" );
 
-
 # and run on reversed chunks
 my $inputHaps_rev = "$inputHaps.rev";
-write_file( $inputHaps_rev,  join( "\n",reverse @chunkHaps ) );
+write_file( $inputHaps_rev, join( "\n", reverse @chunkHaps ) );
 
-my $results_vcf_rev = File::Spec->catfile( $resultsDir, $resultsName . q/.rev.vcf/ );
+my $results_vcf_rev =
+  File::Spec->catfile( $resultsDir, $resultsName . q/.rev.vcf/ );
 system "./hapfuse -w step -o $results_vcf_rev -h $inputHaps_rev -s $inputSamps";
 
 # pull haplotypes out of vcf
-system "vcftools --vcf $results_vcf_rev --IMPUTE --out ${resultsDir}/$resultsName.rev"
+system
+"vcftools --vcf $results_vcf_rev --IMPUTE --out ${resultsDir}/$resultsName.rev"
   . q( && perl -pne 's/^20-\S+/20/; s/allele/a/g; s/pos/position/; s/ID/id/' )
   . " < ${resultsDir}/$resultsName.rev.impute.legend > $resultsLegend.rev";
 
 my $resultsHap_rev = $resultsHap;
 $resultsHap_rev =~ s/\.impute\.hap$/.rev.impute.hap/;
 compare_ok( $expectedLegend, "$resultsLegend.rev", "extracted correct sites" );
-compare_ok( $expectedHap,    $resultsHap_rev,    "hapfuse phases" );
+compare_ok( $expectedHap,    $resultsHap_rev,      "hapfuse phases" );
 
+# now try and output to bcf, but only GT field
+# use test30 bcfs
+my @chunkVCFs = reverse bsd_glob(
+    "../samples/test30/test30.chr20_20*.STv1.2.13.C100.K100.first2Samp.bin.vcf"
+);
+
+$results_vcf =
+  File::Spec->catfile( $resultsDir, $resultsName . q/.from_VCF_only_GT.vcf/ );
+my $cmd = "./hapfuse -w step -tGT -o $results_vcf -Ov " . join( " ", @chunkVCFs );
+print $cmd. "\n";
+system $cmd;

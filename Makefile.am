@@ -2,7 +2,7 @@ dist_doc_DATA = README.md
 ACLOCAL_AMFLAGS = -I m4
 
 testsubdir=results
-TESTS = src/testing/tests/10-testPhaseAPP.pl src/testing/tests/105-linearPrior.pl src/testing/tests/11-testPhaseAPP.pl src/testing/tests/15-simplePhase.pl src/testing/tests/20-bigPhaseAPP.pl src/testing/tests/30-bigPhaseGP.pl src/testing/tests/40-bigPhaseWTCCC.pl
+TESTS = src/testing/tests/05-exceptions.pl src/testing/tests/10-testPhaseAPP.pl src/testing/tests/105-linearPrior.pl src/testing/tests/11-testPhaseAPP.pl src/testing/tests/15-simplePhase.pl src/testing/tests/20-bigPhaseAPP.pl src/testing/tests/30-bigPhaseGP.pl src/testing/tests/40-bigPhaseWTCCC.pl
 #src/testing/runtests.pl
 TEST_EXTENSIONS = .pl
 PL_LOG_COMPILER = $(PERL)

@@ -21,7 +21,7 @@ my $results_vcf =
   File::Spec->catfile( $resDir, $tag . ".$resultsName.fused.vcf" );
 
 my @chunkVcfs = bsd_glob("../samples/$tag/$tag.madeUpData*.vcf");
-my $cmd = "./hapfuse -o $results_vcf " . join( ' ', @chunkVcfs );
+my $cmd = "./hapfuse -w average -tGT,APP -TGT,GP,APP -o $results_vcf " . join( ' ', @chunkVcfs );
 print "Call: $cmd\n";
 system $cmd;
 

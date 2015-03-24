@@ -36,8 +36,9 @@ my $resultsLegend =
   File::Spec->catfile( $resultsDir, $resultsName . q/.impute.legend/ );
 
 my $results_vcf = File::Spec->catfile( $resultsDir, $resultsName . q/.vcf/ );
-system
-  "./hapfuse -o $results_vcf $sd/samples/$testTag/$testTag.chr20*.bin.vcf";
+my $cmd =   "./hapfuse -waverage -tGT,GP -TGT,GP -o $results_vcf $sd/samples/$testTag/$testTag.chr20*.bin.vcf";
+print "Call: $cmd\n";
+system $cmd;
 
 # pull haplotypes out of vcf
 system

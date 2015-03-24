@@ -48,11 +48,13 @@ struct init {
   bool is_x = false;
   std::string outputFile = "";
   std::string mode = "v";
-  WeightingStyle ws = WeightingStyle::AVERAGE;
+  WeightingStyle ws = WeightingStyle::STEP;
   std::string wtcccHapFilesFile = "";
   std::string wtcccSampFilesFile = "";
   std::vector<std::string> cmdLineInputFiles;
   std::unordered_map<std::string, bool> out_format_tags{
+      {"GT", false}, {"GP", false}, {"APP", false}};
+  std::unordered_map<std::string, bool> in_format_tags{
       {"GT", false}, {"GP", false}, {"APP", false}};
   bool unmatchedSitesOK = false;
 };
@@ -71,6 +73,21 @@ void wtccc_hap_order(std::vector<std::string> &wtccc_hap_files,
 
 void bcf_order(std::vector<std::string> &bcf_files);
 
+template <class T>
+void
+order_by_first_pos(std::vector<std::pair<unsigned, std::size_t>> &first_pos,
+                   std::vector<T> &toOrder) {
+
+  sort(first_pos.begin(), first_pos.end());
+
+  // sort hap files
+  std::vector<T> tmp;
+  tmp.reserve(toOrder.size());
+  for (auto o : first_pos)
+    tmp.push_back(std::move(toOrder[o.second]));
+  std::swap(tmp, toOrder);
+}
+
 std::string::size_type tokenize_partial(std::string &str,
                                         std::size_t n_max_tokens,
                                         std::vector<std::string> &tokens);
@@ -85,6 +102,9 @@ private:
   const bool m_out_GT = false;
   const bool m_out_GP = false;
   const bool m_out_APP = false;
+  const bool m_in_GT = false;
+  const bool m_in_GP = false;
+  const bool m_in_APP = false;
 
   list<Site> site;
   std::vector<std::string> m_bcfFiles; // only used for bcfs
@@ -96,13 +116,13 @@ private:
 
   inline size_t numSamps() { return m_names.size(); }
 
-  void write_vcf_head();
+  void write_vcf_head(std::vector<std::string> names, const std::string &chrom);
   std::vector<Site> load_chunk(size_t chunkIdx, bool first);
   std::vector<Site> load_chunk_WTCCC(const std::string &hapFile,
                                      const std::string &sampFile, bool first);
   std::vector<Site> load_chunk_bcf(const std::string &inFile, bool first);
 
-  std::tuple<float, float> extractGP(float *gp, int &gtA, int &gtB);
+  std::tuple<float, float> extractGP(float *gp, int gtA, int gtB);
 
   void find_overlap(std::vector<Site> chunk, std::list<Site>::iterator &first,
                     std::list<Site>::iterator &mid,

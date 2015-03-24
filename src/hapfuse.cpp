@@ -24,7 +24,7 @@ THE SOFTWARE.
 @author Yi Wang
 @date 04/01/2011
 
-Later changes were made by Warren Kretzschmar <wkretzsch@gmail.com>
+2015-04-24: Later changes were made by Warren Kretzschmar <wkretzsch@gmail.com>
 
 */
 
@@ -83,20 +83,8 @@ void wtccc_hap_order(vector<string> &wtccc_hap_files,
     wtccc_first_pos.push_back(make_pair(wtccc.GetFirstPos(), fileNum));
   }
 
-  sort(wtccc_first_pos.begin(), wtccc_first_pos.end());
-
-  // sort hap files
-  vector<string> tmp_wtccc_files;
-  tmp_wtccc_files.reserve(wtccc_hap_files.size());
-  for (auto o : wtccc_first_pos)
-    tmp_wtccc_files.push_back(std::move(wtccc_hap_files[o.second]));
-  swap(tmp_wtccc_files, wtccc_hap_files);
-
-  // do same for samples
-  tmp_wtccc_files.clear();
-  for (auto o : wtccc_first_pos)
-    tmp_wtccc_files.push_back(std::move(wtccc_samp_files[o.second]));
-  swap(tmp_wtccc_files, wtccc_samp_files);
+  order_by_first_pos(wtccc_first_pos, wtccc_hap_files);
+  order_by_first_pos(wtccc_first_pos, wtccc_samp_files);
 }
 
 void bcf_order(vector<string> &bcf_files) {
@@ -130,6 +118,8 @@ void bcf_order(vector<string> &bcf_files) {
     bcf_first_pos.push_back(make_pair(rec->pos + 1, fileNum));
     ++fileNum;
   }
+
+  order_by_first_pos(bcf_first_pos, bcf_files);
 }
 
 // this returns a vector filled with the first n_max_tokens -1 tokens of str
@@ -165,7 +155,21 @@ hapfuse::hapfuse(HapfuseHelper::init init)
       m_out_GT(m_init.out_format_tags.at("GT") == true),
       m_out_GP(m_init.out_format_tags.at("GP") == true),
       m_out_APP(m_init.out_format_tags.at("APP") == true),
+      m_in_GT(m_init.in_format_tags.at("GT") == true),
+      m_in_GP(m_init.in_format_tags.at("GP") == true),
+      m_in_APP(m_init.in_format_tags.at("APP") == true),
       m_bcfFiles(m_init.cmdLineInputFiles) {
+
+  // make sure requested input and output format tags makes sense
+  if (m_out_APP && !m_in_APP)
+    throw runtime_error(
+        "Need to specify APP as input tag if specifying APP as output tag");
+  if (m_out_GP && (!m_in_APP && !m_in_GP))
+    throw runtime_error("Need to specify APP or GP as input tag if specifying "
+                        "GP as output tag");
+  if (m_out_GT && (!m_in_APP && !m_in_GP && !m_in_GT))
+    throw runtime_error("Need to specify GT, APP or GP as input tag if "
+                        "specifying GT as output tag");
 
   // Input files will be WTCCC style
   if (!m_init.wtcccHapFilesFile.empty()) {
@@ -257,7 +261,7 @@ bool hapfuse::gender(const char *F) {
 
 // extract the GP fields, convert them to allelic probabilities and store in
 // pHap1,2
-std::tuple<float, float> hapfuse::extractGP(float *gp, int &gtA, int &gtB) {
+std::tuple<float, float> hapfuse::extractGP(float *gp, int gtA, int gtB) {
 
   // convert GPs to probabilities
   vector<float> GPs;
@@ -303,27 +307,17 @@ vector<Site> hapfuse::load_chunk(size_t chunkIdx, bool first) {
 
 vector<Site> hapfuse::load_chunk_WTCCC(const string &hapFile,
                                        const string &sampFile, bool first) {
+
+  if (!(m_in_GT && m_out_GT) || m_in_APP || m_out_APP || m_in_GP || m_out_GP)
+    throw runtime_error("Please specify only GT as input and output "
+                        "tags when using WTCCC hap files");
+
   // load and check samples
   HapSamp chunk(std::move(hapFile), sampFile);
 
   // Open output VCF for writing
   if (first) {
-    assert(!m_hdr_out);
-    m_hdr_out = bcf_hdr_init("w");
-
-    assert(m_names.empty());
-    m_names = chunk.GetSamps();
-
-    // populate header with sample names
-    for (auto sampName : m_names)
-      bcf_hdr_add_sample(m_hdr_out, sampName.c_str());
-
-    bcf_hdr_add_sample(m_hdr_out, NULL);
-
-    // add contig
-    bcf_hdr_printf(m_hdr_out, "##contig=<ID=%s>", chunk.GetChrom().c_str());
-
-    write_vcf_head();
+    write_vcf_head(std::move(chunk.GetSamps()), chunk.GetChrom());
   } else
     chunk.CheckSamps(m_names);
 
@@ -357,16 +351,15 @@ vector<Site> hapfuse::load_chunk_bcf(const string &inFile, bool first) {
 
   // save first header as template for output file
   if (first) {
-    assert(!m_hdr_out);
-    m_hdr_out = bcf_hdr_dup(hdr.get());
 
     // save names to internal string vector
-    assert(m_names.size() == 0);
-    m_names.reserve(bcf_hdr_nsamples(m_hdr_out));
-    for (int i = 0; i < bcf_hdr_nsamples(m_hdr_out); ++i)
-      m_names.push_back(m_hdr_out->samples[i]);
+    vector<string> samples;
+    samples.reserve(bcf_hdr_nsamples(hdr.get()));
+    for (int i = 0; i < bcf_hdr_nsamples(hdr.get()); ++i)
+      samples.push_back(hdr.get()->samples[i]);
 
-    write_vcf_head();
+    string chrom(bcf_hdr_id2name(hdr.get(), rec->rid));
+    write_vcf_head(std::move(samples), chrom);
   }
 
   vector<string> name;
@@ -385,7 +378,7 @@ vector<Site> hapfuse::load_chunk_bcf(const string &inFile, bool first) {
       throw runtime_error("Sample names do not match: " + name + " != " +
                           m_names[i]);
   }
-  unsigned in = m_names.size();
+  //  unsigned in = m_names.size();
 
   // parsing each line of data
   unsigned cnt_lines = 0;
@@ -396,7 +389,7 @@ vector<Site> hapfuse::load_chunk_bcf(const string &inFile, bool first) {
 
     // site will store the site's information
     Site site;
-    site.hap.resize(in * 2);
+    site.hap.resize(m_names.size() * 2);
     site.weight = 1; // still need to weight correctly
     string a, b;
 
@@ -418,11 +411,15 @@ vector<Site> hapfuse::load_chunk_bcf(const string &inFile, bool first) {
     site.all.push_back(a1);
     site.all.push_back(a2);
 
-    if (!bcf_get_fmt(hdr.get(), rec.get(), "GT"))
+    if(!m_in_GT)
+        throw runtime_error("Need to specify input GT tag if fusing BCF/VCF files");
+
+    if (m_in_GT && !bcf_get_fmt(hdr.get(), rec.get(), "GT"))
       throw std::runtime_error("expected GT field in VCF");
-    if (!bcf_get_fmt(hdr.get(), rec.get(), "GP") &&
-        !bcf_get_fmt(hdr.get(), rec.get(), "APP"))
-      throw std::runtime_error("expected GP or APP field");
+    if (m_in_GP && !bcf_get_fmt(hdr.get(), rec.get(), "GP"))
+      throw std::runtime_error("expected GP field in VCF");
+    if (m_in_APP && !bcf_get_fmt(hdr.get(), rec.get(), "APP"))
+      throw std::runtime_error("expected APP field in VCF");
 
     // read sample specific data
     // get genotype array
@@ -438,19 +435,22 @@ vector<Site> hapfuse::load_chunk_bcf(const string &inFile, bool first) {
     int n_arr = 0, m_arr = 0;
     float *arr = NULL;
     int stride = 0;
-    if (bcf_get_fmt(hdr.get(), rec.get(), "APP")) {
-      stride = 2;
-      n_arr = bcf_get_format_float(hdr.get(), rec.get(), "APP", &arr, &m_arr);
-      assert(n_arr / stride == bcf_hdr_nsamples(hdr.get()));
-    }
-    // get GP array
-    else if (bcf_get_fmt(hdr.get(), rec.get(), "GP")) {
-      stride = 3;
-      n_arr = bcf_get_format_float(hdr.get(), rec.get(), "GP", &arr, &m_arr);
-    } else {
-      free(arr);
-      throw std::runtime_error("could not read record");
-    }
+    if (m_in_GP || m_in_APP) {
+      if (bcf_get_fmt(hdr.get(), rec.get(), "APP")) {
+        stride = 2;
+        n_arr = bcf_get_format_float(hdr.get(), rec.get(), "APP", &arr, &m_arr);
+        assert(n_arr / stride == bcf_hdr_nsamples(hdr.get()));
+      }
+      // get GP array
+      else if (bcf_get_fmt(hdr.get(), rec.get(), "GP")) {
+        stride = 3;
+        n_arr = bcf_get_format_float(hdr.get(), rec.get(), "GP", &arr, &m_arr);
+      } else {
+        free(arr);
+        throw std::runtime_error("could not read record");
+      }
+    } else if (!m_in_GT)
+      throw runtime_error("No output tag defined");
 
     // cycle through sample vals
     for (int sampNum = 0; sampNum < bcf_hdr_nsamples(hdr.get()); ++sampNum) {
@@ -476,25 +476,31 @@ vector<Site> hapfuse::load_chunk_bcf(const string &inFile, bool first) {
 
       float pHap1;
       float pHap2;
-      // parse APPs
-      if (bcf_get_fmt(hdr.get(), rec.get(), "APP")) {
-        pHap1 = HapfuseHelper::phred2Prob(arr[sampNum * stride]);
-        pHap2 = HapfuseHelper::phred2Prob(arr[sampNum * stride + 1]);
-      }
-      // parse GPs
-      else if (bcf_get_fmt(hdr.get(), rec.get(), "GP")) {
-        std::tie(pHap1, pHap2) = extractGP(&arr[sampNum * stride], gtA, gtB);
+      if (m_in_GP || m_in_APP) {
+        // parse APPs
+        if (bcf_get_fmt(hdr.get(), rec.get(), "APP")) {
+          pHap1 = HapfuseHelper::phred2Prob(arr[sampNum * stride]);
+          pHap2 = HapfuseHelper::phred2Prob(arr[sampNum * stride + 1]);
+        }
+        // parse GPs
+        else if (bcf_get_fmt(hdr.get(), rec.get(), "GP")) {
+          std::tie(pHap1, pHap2) = extractGP(&arr[sampNum * stride], gtA, gtB);
+        } else
+          throw std::runtime_error("could not load GP or APP field ");
+
+        assert(pHap1 + pHap2 < 2 + EPSILON);
+
+        // make sure pHap1 and 2 are greater than zero
+        if (pHap1 < 0)
+          pHap1 = 0;
+
+        if (pHap2 < 0)
+          pHap2 = 0;
+      } else if (m_in_GT) {
+        pHap1 = static_cast<float>(gtA);
+        pHap2 = static_cast<float>(gtB);
       } else
-        throw std::runtime_error("could not load GP or APP field ");
-
-      assert(pHap1 + pHap2 < 2 + EPSILON);
-
-      // make sure pHap1 and 2 are greater than zero
-      if (pHap1 < 0)
-        pHap1 = 0;
-
-      if (pHap2 < 0)
-        pHap2 = 0;
+        throw runtime_error("no output tag specified");
 
       site.hap[sampNum * 2] = pHap1;
       site.hap[sampNum * 2 + 1] = pHap2;
@@ -522,9 +528,23 @@ vector<Site> hapfuse::load_chunk_bcf(const string &inFile, bool first) {
   return chunk;
 }
 
-void hapfuse::write_vcf_head() {
+void hapfuse::write_vcf_head(vector<string> names, const string &chrom) {
 
-  assert(m_hdr_out);
+  assert(!m_hdr_out);
+  m_hdr_out = bcf_hdr_init("w");
+
+  assert(m_names.empty());
+  m_names = std::move(names);
+
+  // populate header with sample names
+  for (auto sampName : m_names)
+    bcf_hdr_add_sample(m_hdr_out, sampName.c_str());
+
+  bcf_hdr_add_sample(m_hdr_out, NULL);
+
+  // add contig
+  bcf_hdr_printf(m_hdr_out, "##contig=<ID=%s>", chrom.c_str());
+
   assert(m_fusedVCF);
 
   if (m_out_GT == true)
@@ -748,8 +768,15 @@ void hapfuse::work() {
       }
 
     // add chunk to buffer
+    if (chunk.empty())
+      cout << "Skipping chunk " << i + 1 << " of " << m_numInputChunks
+           << " because it is empty" << endl;
+    else
+      cout << "Merging chunk " << i + 1 << " of " << m_numInputChunks
+           << "\n\tChunk region: " << chunk.front().chr << ":"
+           << chunk.front().pos << "-" << chunk.back().pos << " ... " << flush;
     merge_chunk(std::move(chunk));
-    cout << "Merged chunk " << i + 1 << " of " << m_numInputChunks << endl;
+    cout << "done" << endl;
   }
 
   if (m_numInputChunks > 1) {
@@ -837,6 +864,7 @@ void hapfuse::find_overlap(vector<Site> chunk, list<Site>::iterator &first,
 
 */
 
+// let's return the range of the chunk merged
 void hapfuse::merge_chunk(vector<Site> chunk) {
 
   if (site.empty()) {

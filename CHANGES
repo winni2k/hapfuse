@@ -1,3 +1,11 @@
+v0.14   Tue Mar 24 16:09:10 GMT 2015
+        Added license
+        Moved to getopt long
+        Moved to autoconf
+        Added step weighting for hapfusing
+        Added support for WTCCC style haplotype files
+        Step weighting is now default
+
 v0.10   Fri Oct 10 16:54:34 BST 2014
         Added linear weighting option for hapfusing
 

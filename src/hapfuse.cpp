@@ -230,8 +230,14 @@ hapfuse::hapfuse(HapfuseHelper::init init)
   // this is a WTCCC output file
   if (m_init.mode == "w") {
     m_outputFileType = HapfuseHelper::fileType::WTCCC;
+
+    clog << "Writing output to:\n\tWTCCC haps [" << m_init.outputWTCCCHapsFile
+         << "]" << endl;
     m_fusedWTCCCHaps.open(m_init.outputWTCCCHapsFile);
+
+    clog << "\tWTCCC sample [" << m_init.outputWTCCCSampleFile << "]" << endl;
     m_fusedWTCCCSample.open(m_init.outputWTCCCSampleFile);
+
   }
   // BCF output file
   else if (m_init.mode.find_first_of("buzv") != string::npos) {
@@ -239,6 +245,9 @@ hapfuse::hapfuse(HapfuseHelper::init init)
     assert(!m_fusedVCF);
     if (m_init.outputBCFFile.empty())
       throw runtime_error("Please specify an output file");
+
+    clog << "Writing output to:\n\tVCF/BCF [" << m_init.outputBCFFile << "]"
+         << endl;
 
     string cmode = "w" + m_init.mode;
     m_fusedVCF = hts_open(m_init.outputBCFFile.c_str(), cmode.c_str());
@@ -784,9 +793,9 @@ void hapfuse::work() {
           std::async(launch::async, &hapfuse::load_chunk, this, i + 1, false));
 
     assert(!chunkFutures.empty());
-    cout << "Waiting on chunk to load..." << flush;
+    clog << "Waiting on chunk to load..." << flush;
     vector<Site> chunk = std::move(chunkFutures.front().get());
-    cout << " done" << endl;
+    clog << " done" << endl;
 
     chunkFutures.pop_front();
 
@@ -794,11 +803,11 @@ void hapfuse::work() {
     // but are not in the chunk we just loaded
     if (!site.empty()) {
       if (i > 1) {
-        cout << "Waiting for merged sites to be written.." << flush;
+        clog << "Waiting for merged sites to be written.." << flush;
         outputFut.get();
-        cout << " done" << endl;
+        clog << " done" << endl;
       }
-      cout << "Seeking to beginning of overlap region..." << flush;
+      clog << "Seeking to beginning of overlap region..." << flush;
       outputSites.clear();
 
       // find first site with the same position as first chunk position
@@ -811,11 +820,11 @@ void hapfuse::work() {
       outputSites.splice(outputSites.end(), site, site.begin(), li);
       outputFut =
           std::async(launch::async, &hapfuse::write_sites, this, outputSites);
-      cout << " done" << endl;
+      clog << " done" << endl;
     }
 
     // find the correct phase
-    cout << "Matching up haplotypes between chunks..." << flush;
+    clog << "Matching up haplotypes between chunks..." << flush;
     sum.assign(numSamps() * 2, 0);
 
     for (list<Site>::iterator li = site.begin(); li != site.end(); ++li)
@@ -837,24 +846,24 @@ void hapfuse::work() {
           chunk[m].hap[j * 2 + 1] = t;
         }
       }
-    cout << " done" << endl;
+    clog << " done" << endl;
 
     // add chunk to buffer
     if (chunk.empty())
-      cout << "Skipping chunk " << i + 1 << " of " << m_numInputChunks
+      clog << "Skipping chunk " << i + 1 << " of " << m_numInputChunks
            << " because it is empty" << endl;
     else
-      cout << "Merging chunk " << i + 1 << " of " << m_numInputChunks
+      clog << "Merging chunk " << i + 1 << " of " << m_numInputChunks
            << "\n\tChunk region: " << chunk.front().chr << ":"
            << chunk.front().pos << "-" << chunk.back().pos << " ... " << flush;
     merge_chunk(std::move(chunk));
-    cout << "done" << endl;
+    clog << "done" << endl;
   }
 
   if (m_numInputChunks > 1) {
-    cout << "Waiting for merged sites to be written.." << flush;
+    clog << "Waiting for merged sites to be written.." << flush;
     outputFut.get();
-    cout << " done" << endl;
+    clog << " done" << endl;
   }
   for (auto li : site)
     write_site(li);

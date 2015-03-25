@@ -1,7 +1,7 @@
 #!/bin/perl
 use strict;
 use warnings;
-use Test::More tests => 6;
+use Test::More tests => 8;
 use Test::Files;
 use File::Spec;
 use File::Path qw(make_path remove_tree);
@@ -93,12 +93,12 @@ my $expected_wtccc_haps_file = $expected_wtccc_file;
 $expected_wtccc_haps_file =~ s/\.vcf/.wtccc.haps/;
 my $expected_wtccc_sample_file = $expected_wtccc_haps_file;
 $expected_wtccc_sample_file =~ s/\.haps/.sample/;
-my $results_haps_wtccc_rev = $results_vcf_wtccc_rev;
-$results_haps_wtccc_rev =~ s/\.vcf/.wtccc.haps/;
-my $results_sample_wtccc_rev = $results_haps_wtccc_rev;
-$results_sample_wtccc_rev =~ s/\.haps/.sample/;
+my $base = $results_vcf_wtccc_rev;
+$base =~ s/\.vcf//;
+my $results_haps_wtccc_rev   = "$base.haps";
+my $results_sample_wtccc_rev = "$base.sample";
 $cmd =
-  "./hapfuse -Ow -w step -o $results_haps_wtccc_rev,$results_sample_wtccc_rev -h $inputHaps -s $inputSamps";
+"./hapfuse -Ow -w step -o $results_haps_wtccc_rev,$results_sample_wtccc_rev -h $inputHaps -s $inputSamps";
 print "Call: $cmd\n";
 system $cmd;
 compare_ok( $results_haps_wtccc_rev, $expected_wtccc_haps_file,
@@ -106,3 +106,16 @@ compare_ok( $results_haps_wtccc_rev, $expected_wtccc_haps_file,
 compare_ok( $results_sample_wtccc_rev, $expected_wtccc_sample_file,
     "hapfuse phases from haplotypes to wtccc haps, chunks in reverse order" );
 
+### now redo using prefix argument instead
+my $results_haps_wtccc_rev2   = "$base.2.hap";
+my $results_sample_wtccc_rev2 = "$base.sample";
+$cmd = "./hapfuse -Ow -w step -o $base.2 -h $inputHaps -s $inputSamps";
+print "Call: $cmd\n";
+system $cmd;
+system "gunzip -f $base.2.hap.gz";
+compare_ok( $results_haps_wtccc_rev2, $expected_wtccc_haps_file,
+"hapfuse phases from haplotypes to wtccc haps, chunks in reverse order, prefix supplied"
+);
+compare_ok( $results_sample_wtccc_rev2, $expected_wtccc_sample_file,
+"hapfuse phases from haplotypes to wtccc haps, chunks in reverse order, prefix supplied"
+);

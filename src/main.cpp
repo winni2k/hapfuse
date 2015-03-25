@@ -149,16 +149,16 @@ int main(int argc, char **argv) {
       }
     }
 
-    cout << "Input tags:";
+    clog << "Input tags:";
     for (auto it : init.in_format_tags)
       if (it.second)
-        cout << " " << it.first;
-    cout << endl;
-    cout << "Output tags:";
+        clog << " " << it.first;
+    clog << endl;
+    clog << "Output tags:";
     for (auto it : init.out_format_tags)
       if (it.second)
-        cout << " " << it.first;
-    cout << endl;
+        clog << " " << it.first;
+    clog << endl;
 
     // figure out what input files are
     if (init.mode == "w") {

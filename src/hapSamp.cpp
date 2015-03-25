@@ -165,7 +165,10 @@ Site HapSamp::GetSite() {
 void HapSamp::CheckSamps(const vector<string> &samps) {
 
   if (samps.size() != m_samps.size())
-    throw std::runtime_error("Chunk has wrong number of samples");
+    throw std::runtime_error("Chunk from file [" + m_hapFile + "] has " +
+                             to_string(m_samps.size()) +
+                             " samples, whereas input sample list is of size " +
+                             to_string(samps.size()));
 
   for (size_t sIdx = 0; sIdx < m_samps.size(); ++sIdx)
     if (samps.at(sIdx) != m_samps.at(sIdx))

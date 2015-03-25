@@ -537,33 +537,33 @@ vector<Site> hapfuse::load_chunk_bcf(const string &inFile, bool first) {
 
 void hapfuse::write_head(vector<string> names, const string &chrom) {
 
+  assert(m_names.empty());
+  m_names = std::move(names);
+
   if (m_outputFileType == HapfuseHelper::fileType::BCF)
-    write_vcf_head(std::move(names), chrom);
+    write_vcf_head(chrom);
   else if (m_outputFileType == HapfuseHelper::fileType::WTCCC)
-    write_wtccc_sample(std::move(names));
+    write_wtccc_sample();
   else
     throw runtime_error("Encountered unexpected output file type");
 }
 
-void hapfuse::write_wtccc_sample(vector<string> names) {
+void hapfuse::write_wtccc_sample() {
 
   if (!m_fusedWTCCCSample.good())
     throw runtime_error("Output file is not good [" +
                         m_fusedWTCCCSample.name() + "]");
 
   m_fusedWTCCCSample << "ID_1 ID_2 missing\n0 0 0\n";
-  for (auto n : names)
+  for (auto n : m_names)
     m_fusedWTCCCSample << n << " " << n << " 0\n";
   m_fusedWTCCCSample.close();
 }
 
-void hapfuse::write_vcf_head(vector<string> names, const string &chrom) {
+void hapfuse::write_vcf_head(const string &chrom) {
 
   assert(!m_hdr_out);
   m_hdr_out = bcf_hdr_init("w");
-
-  assert(m_names.empty());
-  m_names = std::move(names);
 
   // populate header with sample names
   for (auto sampName : m_names)
@@ -689,10 +689,12 @@ void hapfuse::write_wtccc_site(const Site &osite, const vector<unsigned> &gts) {
                    << " " << osite.all[1];
 
   // print out every allele
+  // 3 and 5 are 0 or 1, respectively, increased by one and right-shifted by one
+  // see htslib/vcf.h bcf_gt_phased
   for (auto d : gts) {
-    if (d == 1)
+    if (d == 3)
       m_fusedWTCCCHaps << " 0";
-    else if (d == 3)
+    else if (d == 5)
       m_fusedWTCCCHaps << " 1";
     else
       throw runtime_error("encountered unexpected allele: " + to_string(d));

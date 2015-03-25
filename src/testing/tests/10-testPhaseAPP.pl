@@ -1,12 +1,15 @@
 #!/bin/perl
 use strict;
 use warnings;
-use Test::More tests => 4;
+use Test::More tests => 6;
 use Test::Files;
 use File::Spec;
 use File::Path qw(make_path remove_tree);
 use File::Glob ':bsd_glob';
 use File::Slurp;
+use FindBin qw($Bin);
+use lib "$Bin/..";
+use TestHelpers qw(:ALL);
 
 my $tag           = "test10";
 my $sd            = $ENV{srcdir};
@@ -21,7 +24,8 @@ my $results_vcf =
   File::Spec->catfile( $resDir, $tag . ".$resultsName.fused.vcf" );
 
 my @chunkVcfs = bsd_glob("../samples/$tag/$tag.madeUpData*.vcf");
-my $cmd = "./hapfuse -Ov -w average -tGT,APP -TGT,GP,APP -Ov -o $results_vcf " . join( ' ', @chunkVcfs );
+my $cmd = "./hapfuse -Ov -w average -tGT,APP -TGT,GP,APP -Ov -o $results_vcf "
+  . join( ' ', @chunkVcfs );
 print "Call: $cmd\n";
 system $cmd;
 
@@ -62,7 +66,8 @@ $results_vcf_wtccc =~ s/\.vcf$/.wtccc.vcf/;
 my $expected_wtccc_file = $expected_file;
 $expected_wtccc_file =~ s/\.vcf$/.wtccc.vcf/;
 
-$cmd = "./hapfuse -Ov -w step -o $results_vcf_wtccc -h $inputHaps -s $inputSamps";
+$cmd =
+  "./hapfuse -Ov -w step -o $results_vcf_wtccc -h $inputHaps -s $inputSamps";
 print "Call: $cmd\n";
 system $cmd;
 
@@ -76,33 +81,27 @@ my $results_vcf_wtccc_rev = $results_vcf;
 $results_vcf_wtccc_rev =~ s/\.vcf$/.wtccc.rev.vcf/;
 
 $cmd =
-  "./hapfuse -Ov -w step -o $results_vcf_wtccc_rev -h $inputHaps -s $inputSamps";
+"./hapfuse -Ov -w step -o $results_vcf_wtccc_rev -h $inputHaps -s $inputSamps";
 print "Call: $cmd\n";
 system $cmd;
 
 compare_filter_ok( $results_vcf_wtccc_rev, $expected_wtccc_file, \&vcfComp,
     "hapfuse phases from haplotypes, chunks in reverse order" );
 
-sub vcfComp {
-    my $line = shift;
-    $line = removeHeaderLines($line);
-    $line = roundFloats($line);
-    return $line;
-}
+### Now redo, step analysis, but output as wtccc_haps file
+my $expected_wtccc_haps_file = $expected_wtccc_file;
+$expected_wtccc_haps_file =~ s/\.vcf/.wtccc.haps/;
+my $expected_wtccc_sample_file = $expected_wtccc_haps_file;
+$expected_wtccc_sample_file =~ s/\.haps/.sample/;
+my $results_haps_wtccc_rev = $results_vcf_wtccc_rev;
+$results_haps_wtccc_rev =~ s/\.vcf/.wtccc.haps/;
+my $results_sample_wtccc_rev = $results_haps_wtccc_rev;
+$results_sample_wtccc_rev =~ s/\.haps/.wtccc.sample/;
+$cmd =
+  "./hapfuse -Ow -w step -o $results_haps_wtccc_rev,$results_sample_wtccc_rev -h $inputHaps -s $inputSamps";
+print "Call: $cmd\n";
+compare_ok( $results_haps_wtccc_rev, $expected_wtccc_haps_file,
+    "hapfuse phases from haplotypes to wtccc haps, chunks in reverse order" );
+compare_ok( $results_sample_wtccc_rev, $expected_wtccc_sample_file,
+    "hapfuse phases from haplotypes to wtccc haps, chunks in reverse order" );
 
-sub removeHeaderLines {
-    my $line = shift;
-    if ( $line =~ m/^##/ ) {
-        return q//;
-    }
-    return $line;
-}
-
-sub roundFloats {
-    my $line = shift;
-    $line =~ s/(\d+[\.\d]{0,3})\d*/$1/g;
-
-    # wow never thought I'd need a look-ahead assertion...
-    $line =~ s/([,:])(\d+)(?=[,:\t])/$1$2.00/g;
-    return $line;
-}

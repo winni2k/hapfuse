@@ -14,7 +14,7 @@ unless ( qx/which vcftools/ =~ m/.*vcftools$/ ) {
     plan skip_all => "vcftools does not exist on system";
 }
 else {
-    plan tests => 4;
+    plan tests => 8;
 }
 
 # this test tests the GP field parsing
@@ -67,7 +67,8 @@ write_file( $inputHaps_rev, join( "\n", reverse @chunkHaps ) );
 
 my $results_vcf_rev =
   File::Spec->catfile( $resultsDir, $resultsName . q/.rev.vcf/ );
-system "./hapfuse -Ov -w step -o $results_vcf_rev -h $inputHaps_rev -s $inputSamps";
+system
+  "./hapfuse -Ov -w step -o $results_vcf_rev -h $inputHaps_rev -s $inputSamps";
 
 # pull haplotypes out of vcf
 system
@@ -80,14 +81,55 @@ $resultsHap_rev =~ s/\.impute\.hap$/.rev.impute.hap/;
 compare_ok( $expectedLegend, "$resultsLegend.rev", "extracted correct sites" );
 compare_ok( $expectedHap,    $resultsHap_rev,      "hapfuse phases" );
 
-# now try and output to bcf, but only GT field
+### now try the same, but output as WTCCC haps/sample files
+###
+my $tag = "wtccc";
+my $resultsHap_wtccc =
+  File::Spec->catfile( $resultsDir, $resultsName . ".$tag.haps" );
+my $resultsSample_wtccc =
+  File::Spec->catfile( $resultsDir, $resultsName . ".$tag.sample" );
+
+my $cmd =
+"./hapfuse -Ow -w step -o $resultsHap_wtccc,$resultsSample_wtccc -h $inputHaps -s $inputSamps";
+print "Call: " . $cmd . "\n";
+system $cmd;
+
+# convert haps to haps/sample
+my $resLeg_wtccc =
+  File::Spec->catfile( $resultsDir, $resultsName . ".$tag.i2.legend" );
+my $resHap_wtccc =
+  File::Spec->catfile( $resultsDir, $resultsName . ".$tag.i2.hap" );
+$cmd = "(echo 'id position a0 a1'; cut -f1,3-5 -d' ' $resultsHap_wtccc)" . " > $resLeg_wtccc ";
+print $cmd;
+system $cmd;
+$cmd = "cut -f6- -d' ' $resultsHap_wtccc > $resHap_wtccc";
+print $cmd;
+system $cmd;
+compare_ok( $expectedLegend, $resLeg_wtccc,
+    "output as wtccc haps -- i2 legend ok" );
+compare_ok( $expectedHap, $resHap_wtccc, "output as wtccc haps -- i2 hap ok" );
+
+### now try and output to bcf, but only GT field
 # use test30 bcfs
 my @chunkVCFs = reverse bsd_glob(
     "../samples/test30/test30.chr20_20*.STv1.2.13.C100.K100.first2Samp.bin.vcf"
 );
 
-$results_vcf =
-  File::Spec->catfile( $resultsDir, $resultsName . q/.from_VCF_only_GT.vcf/ );
-my $cmd = "./hapfuse -Ov -w step -tGT -o $results_vcf -Ov " . join( " ", @chunkVCFs );
+$tag = q/from_VCF_only_GT/;
+$results_vcf = File::Spec->catfile( $resultsDir, $resultsName . ".$tag.vcf" );
+$cmd = "./hapfuse -Ov -w step -tGT -o $results_vcf " . join( " ", @chunkVCFs );
 print $cmd. "\n";
 system $cmd;
+
+# pull haplotypes out of vcf
+system
+  "vcftools --vcf $results_vcf --IMPUTE --out ${resultsDir}/$resultsName.$tag"
+  . q( && perl -pne 's/^20-\S+/20/; s/allele/a/g; s/pos/position/; s/ID/id/' )
+  . " < ${resultsDir}/$resultsName.$tag.impute.legend > $resultsLegend.$tag";
+compare_ok( $expectedLegend, "$resultsLegend.$tag",
+    "using only GT gives ok haps" );
+
+my $resultsHap_gt = $resultsHap;
+$resultsHap_gt =~ s/\.impute\.hap/.$tag.impute.hap/;
+compare_ok( $expectedHap, $resultsHap_gt, "hapfuse with output GT phases" );
+

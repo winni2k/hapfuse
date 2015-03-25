@@ -120,8 +120,8 @@ private:
   inline size_t numSamps() { return m_names.size(); }
 
   void write_head(std::vector<std::string> names, const std::string &chrom);
-  void write_vcf_head(std::vector<std::string> names, const std::string &chrom);
-  void write_wtccc_sample(std::vector<std::string> names);
+  void write_vcf_head(const std::string &chrom);
+  void write_wtccc_sample();
 
   std::vector<Site> load_chunk(size_t chunkIdx, bool first);
   std::vector<Site> load_chunk_WTCCC(const std::string &hapFile,
@@ -135,8 +135,8 @@ private:
                     std::list<Site>::iterator &last, size_t &chunkMidIdx);
   void merge_chunk(std::vector<Site> chunk);
 
-  htsFile *m_fusedVCF = NULL;
-  bcf_hdr_t *m_hdr_out = NULL;
+  htsFile *m_fusedVCF = nullptr;
+  bcf_hdr_t *m_hdr_out = nullptr;
   ofile m_fusedWTCCCHaps;
   ofile m_fusedWTCCCSample;
   void write_site(const Site &osite);
@@ -159,8 +159,10 @@ public:
   // destroy output header and output file descriptor
   hapfuse(HapfuseHelper::init init);
   ~hapfuse() {
-    bcf_hdr_destroy(m_hdr_out);
-    hts_close(m_fusedVCF);
+    if (m_hdr_out != nullptr)
+      bcf_hdr_destroy(m_hdr_out);
+    if (m_fusedVCF != nullptr)
+      hts_close(m_fusedVCF);
   }
 };
 

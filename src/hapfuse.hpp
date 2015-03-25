@@ -46,8 +46,10 @@ enum class fileType { WTCCC, BCF };
 
 struct init {
   bool is_x = false;
-  std::string outputFile = "";
-  std::string mode = "v";
+  std::string outputBCFFile = "";
+  std::string outputWTCCCHapsFile = "";
+  std::string outputWTCCCSampleFile = "";
+  std::string mode = "b";
   WeightingStyle ws = WeightingStyle::STEP;
   std::string wtcccHapFilesFile = "";
   std::string wtcccSampFilesFile = "";
@@ -111,12 +113,16 @@ private:
   std::vector<std::string> m_wtcccHapFiles;
   std::vector<std::string> m_wtcccSampFiles;
   HapfuseHelper::fileType m_inputFileType = HapfuseHelper::fileType::BCF;
+  HapfuseHelper::fileType m_outputFileType = HapfuseHelper::fileType::BCF;
   set<std::string> male;
   std::vector<std::string> m_names;
 
   inline size_t numSamps() { return m_names.size(); }
 
+  void write_head(std::vector<std::string> names, const std::string &chrom);
   void write_vcf_head(std::vector<std::string> names, const std::string &chrom);
+  void write_wtccc_sample(std::vector<std::string> names);
+
   std::vector<Site> load_chunk(size_t chunkIdx, bool first);
   std::vector<Site> load_chunk_WTCCC(const std::string &hapFile,
                                      const std::string &sampFile, bool first);
@@ -131,7 +137,9 @@ private:
 
   htsFile *m_fusedVCF = NULL;
   bcf_hdr_t *m_hdr_out = NULL;
-  void write_site(const Site &osite) const;
+  ofile m_fusedWTCCCHaps;
+  ofile m_fusedWTCCCSample;
+  void write_site(const Site &osite);
   void write_sites(const list<Site> &outSites) {
     for (auto s : outSites)
       write_site(s);
@@ -139,7 +147,7 @@ private:
   void write_bcf_site(const Site &osite, const std::vector<unsigned> &gts,
                       const std::vector<float> &lineGPs,
                       const std::vector<float> &lineAPPs) const;
-  void write_wtccc_site(const Site &osite) const;
+  void write_wtccc_site(const Site &osite, const std::vector<unsigned> &gts);
 
 public:
   static void document(void);

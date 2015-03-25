@@ -28,7 +28,7 @@ my $resultsHap =
 
 my $results_vcf = File::Spec->catfile( $resultsDir, $resultsName . q/.vcf/ );
 system
-  "./hapfuse -w average -o $results_vcf $sd/samples/$testTag/$testTag.chr20*.bin.vcf";
+  "./hapfuse -Ov -w average -o $results_vcf $sd/samples/$testTag/$testTag.chr20*.bin.vcf";
 
 # pull haplotypes out of vcf
 system "vcftools --vcf $results_vcf --IMPUTE --out ${resultsDir}/$resultsName";

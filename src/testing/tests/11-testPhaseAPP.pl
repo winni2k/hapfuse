@@ -18,7 +18,7 @@ my $resultsName = "madeUpData";
 my $results_vcf =
   File::Spec->catfile( $resDir, $tag . ".$resultsName.fused.vcf" );
 
-my $cmd = "./hapfuse -w average -tGT,APP -TGT,APP,GP -o $results_vcf $sd/samples/$tag/$tag.madeUpData*.vcf";
+my $cmd = "./hapfuse -Ov -w average -tGT,APP -TGT,APP,GP -o $results_vcf $sd/samples/$tag/$tag.madeUpData*.vcf";
 print STDOUT "Command: $cmd\n";
 system $cmd;
 

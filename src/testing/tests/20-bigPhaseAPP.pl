@@ -24,7 +24,7 @@ SKIP: {
 
     my $results_vcf =
       File::Spec->catfile( $resultsDir, $resultsName . q/.vcf/ );
-    system "./hapfuse -w average -o $results_vcf $sd/samples/test20/*.bin.vcf";
+    system "./hapfuse -Ov -w average -o $results_vcf $sd/samples/test20/*.bin.vcf";
 
     # pull haplotypes out of vcf
     system

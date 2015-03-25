@@ -18,10 +18,12 @@ int main(int argc, char **argv) {
          "Usage: hapfuse [options] <-o output_file> <VCF/BCF files to "
          "process>\n\n"
          "    -o, --output <file> [] - required argument\n"
-         "        Name of output file\n\n"
-         "    -O, --output-type <b|u|z|v> [v]\n"
+         "        Name of output file if output is VCF/BCF\n"
+         "        Prefix or comma separated haps,sample files if -Ow\n\n"
+         "    -O, --output-type <b|u|z|v|w> [b]\n"
          "        Output file type. b: compressed BCF, u: uncompressed BCF,\n"
-         "        z: compressed VCF, v: uncompressed VCF\n\n"
+         "        z: compressed VCF, v: uncompressed VCF,\n"
+         "        w: WTCCC style haps/sample\n\n"
          "    -g, --gender-file <file> []\n"
          "        File that indicates which gender each sample is. Only used "
          "        for x chromosome.\n"
@@ -52,6 +54,7 @@ int main(int argc, char **argv) {
     HapfuseHelper::init init;
     vector<string> out_format_tags;
     vector<string> in_format_tags;
+    vector<string> output_files;
 
     static struct option loptions[] = {
         {"gender-file", required_argument, nullptr, 'g'},
@@ -73,7 +76,7 @@ int main(int argc, char **argv) {
         break;
 
       case 'o':
-        init.outputFile = optarg;
+        boost::split(output_files, optarg, boost::is_any_of(","));
         break;
 
       case 'O':
@@ -156,6 +159,21 @@ int main(int argc, char **argv) {
       if (it.second)
         cout << " " << it.first;
     cout << endl;
+
+    // figure out what input files are
+    if (init.mode == "w") {
+      if (output_files.size() == 1) {
+        init.outputWTCCCHapsFile = output_files[0] + ".hap.gz";
+        init.outputWTCCCSampleFile = output_files[0] + ".sample";
+      } else if (output_files.size() == 2) {
+        init.outputWTCCCHapsFile = output_files[0];
+        init.outputWTCCCSampleFile = output_files[1];
+      } else
+        throw runtime_error("Could not interpret -o option");
+    } else {
+      assert(output_files.size() == 1);
+      init.outputBCFFile = output_files[0];
+    }
 
     //  omp_set_num_threads(numThreads);
 

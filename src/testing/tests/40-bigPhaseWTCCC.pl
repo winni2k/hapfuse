@@ -51,7 +51,7 @@ write_file( $inputHaps,  join( "\n", @chunkHaps ) );
 write_file( $inputSamps, join( "\n", @chunkSamps ) );
 
 my $results_vcf = File::Spec->catfile( $resultsDir, $resultsName . q/.vcf/ );
-system "./hapfuse -w step -o $results_vcf -h $inputHaps -s $inputSamps";
+system "./hapfuse -Ov -w step -o $results_vcf -h $inputHaps -s $inputSamps";
 
 # pull haplotypes out of vcf
 system "vcftools --vcf $results_vcf --IMPUTE --out ${resultsDir}/$resultsName"
@@ -67,7 +67,7 @@ write_file( $inputHaps_rev, join( "\n", reverse @chunkHaps ) );
 
 my $results_vcf_rev =
   File::Spec->catfile( $resultsDir, $resultsName . q/.rev.vcf/ );
-system "./hapfuse -w step -o $results_vcf_rev -h $inputHaps_rev -s $inputSamps";
+system "./hapfuse -Ov -w step -o $results_vcf_rev -h $inputHaps_rev -s $inputSamps";
 
 # pull haplotypes out of vcf
 system
@@ -88,6 +88,6 @@ my @chunkVCFs = reverse bsd_glob(
 
 $results_vcf =
   File::Spec->catfile( $resultsDir, $resultsName . q/.from_VCF_only_GT.vcf/ );
-my $cmd = "./hapfuse -w step -tGT -o $results_vcf -Ov " . join( " ", @chunkVCFs );
+my $cmd = "./hapfuse -Ov -w step -tGT -o $results_vcf -Ov " . join( " ", @chunkVCFs );
 print $cmd. "\n";
 system $cmd;

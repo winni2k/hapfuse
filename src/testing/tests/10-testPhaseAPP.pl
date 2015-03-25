@@ -21,7 +21,7 @@ my $results_vcf =
   File::Spec->catfile( $resDir, $tag . ".$resultsName.fused.vcf" );
 
 my @chunkVcfs = bsd_glob("../samples/$tag/$tag.madeUpData*.vcf");
-my $cmd = "./hapfuse -w average -tGT,APP -TGT,GP,APP -o $results_vcf " . join( ' ', @chunkVcfs );
+my $cmd = "./hapfuse -Ov -w average -tGT,APP -TGT,GP,APP -Ov -o $results_vcf " . join( ' ', @chunkVcfs );
 print "Call: $cmd\n";
 system $cmd;
 
@@ -62,7 +62,7 @@ $results_vcf_wtccc =~ s/\.vcf$/.wtccc.vcf/;
 my $expected_wtccc_file = $expected_file;
 $expected_wtccc_file =~ s/\.vcf$/.wtccc.vcf/;
 
-$cmd = "./hapfuse -w step -o $results_vcf_wtccc -h $inputHaps -s $inputSamps";
+$cmd = "./hapfuse -Ov -w step -o $results_vcf_wtccc -h $inputHaps -s $inputSamps";
 print "Call: $cmd\n";
 system $cmd;
 
@@ -76,7 +76,7 @@ my $results_vcf_wtccc_rev = $results_vcf;
 $results_vcf_wtccc_rev =~ s/\.vcf$/.wtccc.rev.vcf/;
 
 $cmd =
-  "./hapfuse -w step -o $results_vcf_wtccc_rev -h $inputHaps -s $inputSamps";
+  "./hapfuse -Ov -w step -o $results_vcf_wtccc_rev -h $inputHaps -s $inputSamps";
 print "Call: $cmd\n";
 system $cmd;
 

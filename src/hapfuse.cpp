@@ -227,18 +227,24 @@ hapfuse::hapfuse(HapfuseHelper::init init)
       throw runtime_error("Input file does not exist [" + oneFile + "]");
 
   // open output file for writing
-  assert(!m_fusedVCF);
-  if (m_init.outputFile.empty())
-    throw runtime_error("Please specify an output file");
+  // this is a WTCCC output file
+  if (m_init.mode == "w") {
+    m_outputFileType = HapfuseHelper::fileType::WTCCC;
+    m_fusedWTCCCHaps.open(m_init.outputWTCCCHapsFile);
+    m_fusedWTCCCSample.open(m_init.outputWTCCCSampleFile);
+  }
+  // BCF output file
+  else if (m_init.mode.find_first_of("buzv") != string::npos) {
+    m_outputFileType = HapfuseHelper::fileType::BCF;
+    assert(!m_fusedVCF);
+    if (m_init.outputBCFFile.empty())
+      throw runtime_error("Please specify an output file");
 
-  size_t found = m_init.mode.find_first_of("buzv");
-  if (m_init.mode.size() > 0 &&
-      (m_init.mode.size() != 1 || found == string::npos))
-    throw runtime_error("-O needs to be 'b' for compressed bcf, 'u' for "
-                        "uncompressed bcf, 'z' for compressed vcf or 'v' for "
-                        "uncompressed vcf");
-  string cmode = "w" + m_init.mode;
-  m_fusedVCF = hts_open(m_init.outputFile.c_str(), cmode.c_str());
+    string cmode = "w" + m_init.mode;
+    m_fusedVCF = hts_open(m_init.outputBCFFile.c_str(), cmode.c_str());
+  } else
+    throw runtime_error("Encountered unexpected output type [" + m_init.mode +
+                        "]");
 }
 
 bool hapfuse::gender(const char *F) {
@@ -317,7 +323,7 @@ vector<Site> hapfuse::load_chunk_WTCCC(const string &hapFile,
 
   // Open output VCF for writing
   if (first) {
-    write_vcf_head(std::move(chunk.GetSamps()), chunk.GetChrom());
+    write_head(std::move(chunk.GetSamps()), chunk.GetChrom());
   } else
     chunk.CheckSamps(m_names);
 
@@ -359,7 +365,7 @@ vector<Site> hapfuse::load_chunk_bcf(const string &inFile, bool first) {
       samples.push_back(hdr.get()->samples[i]);
 
     string chrom(bcf_hdr_id2name(hdr.get(), rec->rid));
-    write_vcf_head(std::move(samples), chrom);
+    write_head(std::move(samples), chrom);
   }
 
   vector<string> name;
@@ -529,6 +535,28 @@ vector<Site> hapfuse::load_chunk_bcf(const string &inFile, bool first) {
   return chunk;
 }
 
+void hapfuse::write_head(vector<string> names, const string &chrom) {
+
+  if (m_outputFileType == HapfuseHelper::fileType::BCF)
+    write_vcf_head(std::move(names), chrom);
+  else if (m_outputFileType == HapfuseHelper::fileType::WTCCC)
+    write_wtccc_sample(std::move(names));
+  else
+    throw runtime_error("Encountered unexpected output file type");
+}
+
+void hapfuse::write_wtccc_sample(vector<string> names) {
+
+  if (!m_fusedWTCCCSample.good())
+    throw runtime_error("Output file is not good [" +
+                        m_fusedWTCCCSample.name() + "]");
+
+  m_fusedWTCCCSample << "ID_1 ID_2 missing\n0 0 0\n";
+  for (auto n : names)
+    m_fusedWTCCCSample << n << " " << n << " 0\n";
+  m_fusedWTCCCSample.close();
+}
+
 void hapfuse::write_vcf_head(vector<string> names, const string &chrom) {
 
   assert(!m_hdr_out);
@@ -576,7 +604,7 @@ void hapfuse::write_vcf_head(vector<string> names, const string &chrom) {
   bcf_hdr_write(m_fusedVCF, m_hdr_out);
 }
 
-void hapfuse::write_site(const Site &osite) const {
+void hapfuse::write_site(const Site &osite) {
 
   size_t numSamps = osite.hap.size() / 2;
   double k = 1.0 / osite.weight;
@@ -639,12 +667,37 @@ void hapfuse::write_site(const Site &osite) const {
     }
   } // end numSamps
 
-  if (m_fusedVCF != nullptr) {
+  switch (m_outputFileType) {
+  case HapfuseHelper::fileType::BCF:
     write_bcf_site(osite, gts, lineGPs, lineAPPs);
-  } else if (false) {
-      // need to fill with call to write_wtccc_site
-  } else
+    break;
+  case HapfuseHelper::fileType::WTCCC:
+    write_wtccc_site(osite, gts);
+    break;
+  default:
     throw runtime_error("No output file available!");
+  }
+}
+
+void hapfuse::write_wtccc_site(const Site &osite, const vector<unsigned> &gts) {
+
+  if (!m_fusedWTCCCHaps.good())
+    throw runtime_error("Output file is not good");
+
+  // write out the first five columns
+  m_fusedWTCCCHaps << osite.chr << " . " << osite.pos << " " << osite.all[0]
+                   << " " << osite.all[1];
+
+  // print out every allele
+  for (auto d : gts) {
+    if (d == 1)
+      m_fusedWTCCCHaps << " 0";
+    else if (d == 3)
+      m_fusedWTCCCHaps << " 1";
+    else
+      throw runtime_error("encountered unexpected allele: " + to_string(d));
+  }
+  m_fusedWTCCCHaps << "\n";
 }
 
 void hapfuse::write_bcf_site(const Site &osite, const vector<unsigned> &gts,

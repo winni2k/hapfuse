@@ -19,7 +19,7 @@ my $resultsName = "madeUpData";
 my $results_vcf =
   File::Spec->catfile( $resDir, $tag . ".$resultsName.fused.vcf" );
 
-my $cmd = "./hapfuse -tGT,APP -TGT,APP,GP -o $results_vcf -w linear $sd/samples/$tag/$tag.madeUpData*.vcf";
+my $cmd = "./hapfuse -Ov -tGT,APP -TGT,APP,GP -o $results_vcf -w linear $sd/samples/$tag/$tag.madeUpData*.vcf";
 print "Call: $cmd\n";
 system $cmd;
 

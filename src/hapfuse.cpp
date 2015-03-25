@@ -798,6 +798,7 @@ void hapfuse::work() {
         outputFut.get();
         cout << " done" << endl;
       }
+      cout << "Seeking to beginning of overlap region..." << flush;
       outputSites.clear();
 
       // find first site with the same position as first chunk position
@@ -810,9 +811,11 @@ void hapfuse::work() {
       outputSites.splice(outputSites.end(), site, site.begin(), li);
       outputFut =
           std::async(launch::async, &hapfuse::write_sites, this, outputSites);
+      cout << " done" << endl;
     }
 
     // find the correct phase
+    cout << "Matching up haplotypes between chunks..." << flush;
     sum.assign(numSamps() * 2, 0);
 
     for (list<Site>::iterator li = site.begin(); li != site.end(); ++li)
@@ -834,6 +837,7 @@ void hapfuse::work() {
           chunk[m].hap[j * 2 + 1] = t;
         }
       }
+    cout << " done" << endl;
 
     // add chunk to buffer
     if (chunk.empty())

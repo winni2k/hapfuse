@@ -96,10 +96,11 @@ $expected_wtccc_sample_file =~ s/\.haps/.sample/;
 my $results_haps_wtccc_rev = $results_vcf_wtccc_rev;
 $results_haps_wtccc_rev =~ s/\.vcf/.wtccc.haps/;
 my $results_sample_wtccc_rev = $results_haps_wtccc_rev;
-$results_sample_wtccc_rev =~ s/\.haps/.wtccc.sample/;
+$results_sample_wtccc_rev =~ s/\.haps/.sample/;
 $cmd =
   "./hapfuse -Ow -w step -o $results_haps_wtccc_rev,$results_sample_wtccc_rev -h $inputHaps -s $inputSamps";
 print "Call: $cmd\n";
+system $cmd;
 compare_ok( $results_haps_wtccc_rev, $expected_wtccc_haps_file,
     "hapfuse phases from haplotypes to wtccc haps, chunks in reverse order" );
 compare_ok( $results_sample_wtccc_rev, $expected_wtccc_sample_file,

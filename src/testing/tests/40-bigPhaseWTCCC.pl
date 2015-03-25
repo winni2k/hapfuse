@@ -14,7 +14,7 @@ unless ( qx/which vcftools/ =~ m/.*vcftools$/ ) {
     plan skip_all => "vcftools does not exist on system";
 }
 else {
-    plan tests => 8;
+    plan tests => 9;
 }
 
 # this test tests the GP field parsing
@@ -99,7 +99,8 @@ my $resLeg_wtccc =
   File::Spec->catfile( $resultsDir, $resultsName . ".$tag.i2.legend" );
 my $resHap_wtccc =
   File::Spec->catfile( $resultsDir, $resultsName . ".$tag.i2.hap" );
-$cmd = "(echo 'id position a0 a1'; cut -f1,3-5 -d' ' $resultsHap_wtccc)" . " > $resLeg_wtccc ";
+$cmd = "(echo 'id position a0 a1'; cut -f1,3-5 -d' ' $resultsHap_wtccc)"
+  . " > $resLeg_wtccc ";
 print $cmd;
 system $cmd;
 $cmd = "cut -f6- -d' ' $resultsHap_wtccc > $resHap_wtccc";
@@ -108,6 +109,8 @@ system $cmd;
 compare_ok( $expectedLegend, $resLeg_wtccc,
     "output as wtccc haps -- i2 legend ok" );
 compare_ok( $expectedHap, $resHap_wtccc, "output as wtccc haps -- i2 hap ok" );
+compare_ok( $chunkSamps[0], $resultsSample_wtccc,
+    "output as wtccc sample -- ok" );
 
 ### now try and output to bcf, but only GT field
 # use test30 bcfs

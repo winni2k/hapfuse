@@ -5,6 +5,9 @@ use Test::More tests => 2;
 use Test::Files;
 use File::Spec;
 use File::Path qw(make_path remove_tree);
+use FindBin qw($Bin);
+use lib "$Bin/..";
+use TestHelpers qw(:ALL);
 
 my $tag           = "test105";
 my $sd = $ENV{srcdir};
@@ -42,26 +45,3 @@ SKIP: {
 compare_filter_ok( $results_vcf, $expected_file, \&vcfComp,
     "hapfuse phases and gets APPs right" );
 
-sub vcfComp {
-    my $line = shift;
-    $line = removeHeaderLines($line);
-    $line = roundFloats($line);
-    return $line;
-}
-
-sub removeHeaderLines {
-    my $line = shift;
-    if ( $line =~ m/^##/ ) {
-        return q//;
-    }
-    return $line;
-}
-
-sub roundFloats {
-    my $line = shift;
-    $line =~ s/(\d+[\.\d]{0,3})\d*/$1/g;
-
-    # wow never thought I'd need a look-ahead assertion...
-    $line =~ s/([,:])(\d+)(?=[,:\t])/$1$2.00/g;
-    return $line;
-}

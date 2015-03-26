@@ -43,9 +43,13 @@ and saving as gzip compressed BCF
     file1.sample
     file2.sample
     file3.sample
-
+    
+    # output as bcf
     hapfuse -h hap.files -H sample.files -Ob -o fused.bcf.gz
-o
+    
+    # since version 1.0: output as WTCCC file pair
+    hapfuse -h hap.files -H sample.files -Ow -o fused.wtccc.haps.gz,fused.wtccc.sample
+
 ## Description
 
 Hapfuse ligates overlapping haplotype chunks with identical samples

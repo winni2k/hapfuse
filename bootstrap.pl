@@ -9,6 +9,14 @@ use File::Slurp;
 use autodie;
 use FindBin qw/$Bin/;
 
+# run autoconf, etc.
+print STDERR "aclocal...\n";
+system('aclocal');
+print STDERR "autoconf...\n";
+system('autoconf');
+print STDERR "automake -a ...\n";
+system('automake -a');
+
 # find package version
 my @configFile = read_file("$Bin/configure.ac");
 my @lines = grep { m/^\s*AC_INIT/ } @configFile;
@@ -23,18 +31,20 @@ my ( undef, $binName, $version, $email ) = @line;
 
 my $buildDir = "$Bin/$binName.$version";
 
-print "Creating Build dir at " . basename($buildDir) . "\n";
+print STDERR "Creating Build dir at " . basename($buildDir) . "\n";
 make_path($buildDir);
 chdir "$buildDir";
 
-print "Configuring...\n";
+print STDERR "Configuring...\n";
 system "../configure";
 
-print "make all";
+print STDERR "make all";
 system "make all";
 
-print "Returning to base dir\n";
+print STDERR "Returning to base dir\n";
 chdir "$Bin";
+
+print STDERR "\nAll files built in $buildDir\n";
 
 __END__
 

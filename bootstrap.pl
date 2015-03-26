@@ -10,14 +10,8 @@ use autodie;
 use FindBin qw/$Bin/;
 
 # run autoconf, etc.
-print STDERR "libtoolize...\n";
-system('libtoolize');
-print STDERR "aclocal...\n";
-system('aclocal');
-print STDERR "autoconf...\n";
-system('autoconf');
-print STDERR "automake -a...\n";
-system('automake -a');
+print STDERR "autoreconf --install --symlink...\n";
+system('autoreconf --install --symlink');
 
 # find package version
 my @configFile = read_file("$Bin/configure.ac");

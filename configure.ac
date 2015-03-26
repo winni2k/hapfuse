@@ -9,11 +9,13 @@ AC_CONFIG_MACRO_DIR([m4])
 echo "Testing for a c++ complier"
 AC_PROG_CXX
 
+echo "Setting language to C++"
 AC_LANG(C++)
 AC_PROG_CXX
 
 # Check for C++11
-AX_CXX_COMPILE_STDCXX_11()
+echo "Check for C++11 support in compiler"
+AX_CXX_COMPILE_STDCXX_11(,mandatory)
 
 AC_PROG_LIBTOOL
 

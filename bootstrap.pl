@@ -10,11 +10,13 @@ use autodie;
 use FindBin qw/$Bin/;
 
 # run autoconf, etc.
+print STDERR "libtoolize...\n";
+system('libtoolize');
 print STDERR "aclocal...\n";
 system('aclocal');
 print STDERR "autoconf...\n";
 system('autoconf');
-print STDERR "automake -a ...\n";
+print STDERR "automake -a...\n";
 system('automake -a');
 
 # find package version

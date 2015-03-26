@@ -27,14 +27,14 @@
 #   Copyright (c) 2008 Benjamin Kosnik <bkoz@redhat.com>
 #   Copyright (c) 2012 Zack Weinberg <zackw@panix.com>
 #   Copyright (c) 2013 Roy Stogner <roystgnr@ices.utexas.edu>
-#   Copyright (c) 2014 Alexey Sokolov <sokolov@google.com>
+#   Copyright (c) 2014, 2015 Google Inc.; contributed by Alexey Sokolov <sokolov@google.com>
 #
 #   Copying and distribution of this file, with or without modification, are
 #   permitted in any medium without royalty provided the copyright notice
 #   and this notice are preserved. This file is offered as-is, without any
 #   warranty.
 
-#serial 4
+#serial 10
 
 m4_define([_AX_CXX_COMPILE_STDCXX_11_testbody], [[
   template <typename T>
@@ -61,6 +61,29 @@ m4_define([_AX_CXX_COMPILE_STDCXX_11_testbody], [[
 
     auto d = a;
     auto l = [](){};
+    // Prevent Clang error: unused variable 'l' [-Werror,-Wunused-variable]
+    struct use_l { use_l() { l(); } };
+
+    // http://stackoverflow.com/questions/13728184/template-aliases-and-sfinae
+    // Clang 3.1 fails with headers of libstd++ 4.8.3 when using std::function because of this
+    namespace test_template_alias_sfinae {
+        struct foo {};
+
+        template<typename T>
+        using member = typename T::member_type;
+
+        template<typename T>
+        void func(...) {}
+
+        template<typename T>
+        void func(member<T>*) {}
+
+        void test();
+
+        void test() {
+            func<foo>(0);
+        }
+    }
 ]])
 
 AC_DEFUN([AX_CXX_COMPILE_STDCXX_11], [dnl
@@ -123,23 +146,7 @@ AC_DEFUN([AX_CXX_COMPILE_STDCXX_11], [dnl
     done
   fi])
   AC_LANG_POP([C++])
-
   if test x$ax_cxx_compile_cxx11_required = xtrue; then
-    if test x$ac_success = xno; then
-       if test x$CXX = xg++; then
-         GCC_VERSION_MAJOR=$(g++ -dumpversion | cut -d'.' -f1)
-         GCC_VERSION_MINOR=$(g++ -dumpversion | cut -d'.' -f2)
-
-         if test "$GCC_VERSION_MAJOR" -ge 4; then
-           if test "$GCC_VERSION_MINOR" -ge 6; then
-             ac_success=yes
-             CXXFLAGS="-std=c++0x"
-             HAVE_CXX11=1
-           fi
-         fi
-       fi
-    fi
-
     if test x$ac_success = xno; then
       AC_MSG_ERROR([*** A compiler with support for C++11 language features is required.])
     fi

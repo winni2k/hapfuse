@@ -19,10 +19,17 @@ AX_CXX_COMPILE_STDCXX_11(,mandatory)
 
 AC_PROG_LIBTOOL
 
-#echo "Testing for boost"
-#BOOST_REQUIRE([1.34.1])
-#BOOST_IOSTREAMS
+# Checks for libraries
+echo "Check for other libraries"
+AC_SEARCH_LIBS([hts_version],[hts],[],[
+        AC_MSG_ERROR([unable to find the hts_version() function from libhts])
+        ])
 
+echo "Check for Boost"
+BOOST_REQUIRE([1.34.1])
+BOOST_IOSTREAMS
+
+echo "Check for Perl"
 AC_PATH_PROG(PERL, perl)
 if test -z "$PERL"; then
    AC_MSG_ERROR([perl not found])
@@ -31,11 +38,7 @@ if test -n "`$PERL -v | fgrep 'version 5.001' 2> /dev/null`"; then
    AC_MSG_ERROR([perl 5.001 has bug which causes automake to fail])
 fi
 
-
-#AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_FILES([Makefile])
 AC_OUTPUT
 
-#AC_CHECK_HEADERS(iostream)
-#AC_CHECK_LIB(m, cos)
 

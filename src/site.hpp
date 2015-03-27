@@ -4,6 +4,9 @@
 #ifndef _SITE_HPP
 #define _SITE_HPP 1
 
+#include <vector>
+#include <string>
+
 class Site {
 public:
   std::vector<double> hap;

@@ -10,7 +10,6 @@
 
 #include <iostream>
 #include <iomanip>
-#include <unordered_map>
 #include <algorithm>
 #include <dirent.h>
 #include <stdint.h>
@@ -23,7 +22,6 @@
 #include <vector>
 #include <zlib.h>
 #include <list>
-#include <set>
 #include <boost/algorithm/string.hpp>
 #include <cmath>
 #include <cfloat>
@@ -34,68 +32,13 @@
 #include <sys/stat.h>
 #include <getopt.h>
 
-#include "site.hpp"
+#include "hfHelper.hpp"
 #include "hapSamp.hpp"
+#include "site.hpp"
 #include "utils.hpp"
+#include "writer.hpp"
 
 #define EPSILON 0.001 // precision of input floats
-
-namespace HapfuseHelper {
-enum class WeightingStyle { AVERAGE, LINEAR, STEP };
-enum class fileType { WTCCC, BCF };
-
-struct init {
-  bool is_x = false;
-  std::string outputBCFFile = "";
-  std::string outputWTCCCHapsFile = "";
-  std::string outputWTCCCSampleFile = "";
-  std::string mode = "b";
-  WeightingStyle ws = WeightingStyle::STEP;
-  std::string wtcccHapFilesFile = "";
-  std::string wtcccSampFilesFile = "";
-  std::vector<std::string> cmdLineInputFiles;
-  std::unordered_map<std::string, bool> out_format_tags{
-      {"GT", false}, {"GP", false}, {"APP", false}};
-  std::unordered_map<std::string, bool> in_format_tags{
-      {"GT", false}, {"GP", false}, {"APP", false}};
-  bool unmatchedSitesOK = false;
-};
-
-void load_files_from_file(const std::string &fileFile,
-                          std::vector<std::string> &inFiles);
-
-// converts a probability to phred scale
-double prob2Phred(double prob);
-
-// converts a phred scaled probability back to a probability
-double phred2Prob(double phred);
-
-void wtccc_hap_order(std::vector<std::string> &wtccc_hap_files,
-                     std::vector<std::string> &wtccc_samp_files);
-
-void bcf_order(std::vector<std::string> &bcf_files);
-
-template <class T>
-void
-order_by_first_pos(std::vector<std::pair<unsigned, std::size_t>> &first_pos,
-                   std::vector<T> &toOrder) {
-
-  sort(first_pos.begin(), first_pos.end());
-
-  // sort hap files
-  std::vector<T> tmp;
-  tmp.reserve(toOrder.size());
-  for (auto o : first_pos)
-    tmp.push_back(std::move(toOrder[o.second]));
-  std::swap(tmp, toOrder);
-}
-
-std::string::size_type tokenize_partial(std::string &str,
-                                        std::size_t n_max_tokens,
-                                        std::vector<std::string> &tokens);
-int tokenize_from(const std::string &str, std::string::size_type p_last,
-                  std::vector<std::string> &tokens);
-}
 
 class hapfuse {
 private:
@@ -108,62 +51,40 @@ private:
   const bool m_in_GP = false;
   const bool m_in_APP = false;
 
-  list<Site> site;
+  // reader
   std::vector<std::string> m_bcfFiles; // only used for bcfs
   std::vector<std::string> m_wtcccHapFiles;
   std::vector<std::string> m_wtcccSampFiles;
-  HapfuseHelper::fileType m_inputFileType = HapfuseHelper::fileType::BCF;
-  HapfuseHelper::fileType m_outputFileType = HapfuseHelper::fileType::BCF;
-  set<std::string> male;
-  std::vector<std::string> m_names;
 
-  inline size_t numSamps() { return m_names.size(); }
-
-  void write_head(std::vector<std::string> names, const std::string &chrom);
-  void write_vcf_head(const std::string &chrom);
-  void write_wtccc_sample();
-
-  std::vector<Site> load_chunk(size_t chunkIdx, bool first);
   std::vector<Site> load_chunk_WTCCC(const std::string &hapFile,
                                      const std::string &sampFile, bool first);
   std::vector<Site> load_chunk_bcf(const std::string &inFile, bool first);
-
   std::tuple<float, float> extractGP(float *gp, int gtA, int gtB);
+
+  // writer
+  hf::Writer m_writer;
+  hf::WriterHelper::init m_writerInit;
+
+  list<Site> site;
+  HapfuseHelper::fileType m_inputFileType = HapfuseHelper::fileType::BCF;
+  HapfuseHelper::fileType m_outputFileType = HapfuseHelper::fileType::BCF;
+  std::vector<std::string> m_names;
+
+  inline size_t numSamps() { return m_names.size(); }
 
   void find_overlap(std::vector<Site> chunk, std::list<Site>::iterator &first,
                     std::list<Site>::iterator &mid,
                     std::list<Site>::iterator &last, size_t &chunkMidIdx);
   void merge_chunk(std::vector<Site> chunk);
 
-  htsFile *m_fusedVCF = nullptr;
-  bcf_hdr_t *m_hdr_out = nullptr;
-  ofile m_fusedWTCCCHaps;
-  ofile m_fusedWTCCCSample;
-  void write_site(const Site &osite);
-  void write_sites(const list<Site> &outSites) {
-    for (auto s : outSites)
-      write_site(s);
-  }
-  void write_bcf_site(const Site &osite, const std::vector<unsigned> &gts,
-                      const std::vector<float> &lineGPs,
-                      const std::vector<float> &lineAPPs) const;
-  void write_wtccc_site(const Site &osite, const std::vector<unsigned> &gts);
-
 public:
-  static void document(void);
-  bool is_x() { return m_init.is_x; }
   bool gender(const char *F);
   bool load_dir(const char *D);
   void work();
+  std::vector<Site> load_chunk(size_t chunkIdx, bool first);
 
   // destroy output header and output file descriptor
   hapfuse(HapfuseHelper::init init);
-  ~hapfuse() {
-    if (m_hdr_out != nullptr)
-      bcf_hdr_destroy(m_hdr_out);
-    if (m_fusedVCF != nullptr)
-      hts_close(m_fusedVCF);
-  }
 };
 
 #endif /* _HAPFUSE_HPP */

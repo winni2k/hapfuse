@@ -11,7 +11,7 @@ distclean-local:
 	-rm -rf $(testsubdir)
 
 bin_PROGRAMS = hapfuse
-hapfuse_SOURCES = src/hapfuse.cpp src/hapfuse.hpp src/hapSamp.cpp src/hapSamp.hpp src/main.cpp src/site.hpp src/utils.cpp
+hapfuse_SOURCES = src/hapfuse.cpp src/hapfuse.hpp src/hapSamp.cpp src/hapSamp.hpp src/main.cpp src/site.hpp src/utils.cpp src/writer.cpp src/writer.hpp src/hfHelper.hpp
 
 AM_CPPFLAGS = $(BOOST_CPPFLAGS)
 AM_LDFLAGS = $(BOOST_IOSTREAMS_LDFLAGS)

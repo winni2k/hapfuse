@@ -54,7 +54,6 @@ int main(int argc, char **argv) {
     HapfuseHelper::init init;
     vector<string> out_format_tags;
     vector<string> in_format_tags;
-    vector<string> output_files;
 
     static struct option loptions[] = {
         {"gender-file", required_argument, nullptr, 'g'},
@@ -72,11 +71,11 @@ int main(int argc, char **argv) {
       switch (opt) {
       case 'g':
         init.is_x = true;
-        genderFile = optarg;
+        init.genderFile = optarg;
         break;
 
       case 'o':
-        boost::split(output_files, optarg, boost::is_any_of(","));
+        boost::split(init.outputFiles, optarg, boost::is_any_of(","));
         break;
 
       case 'O':
@@ -160,27 +159,9 @@ int main(int argc, char **argv) {
         clog << " " << it.first;
     clog << endl;
 
-    // figure out what input files are
-    if (init.mode == "w") {
-      if (output_files.size() == 1) {
-        init.outputWTCCCHapsFile = output_files[0] + ".hap.gz";
-        init.outputWTCCCSampleFile = output_files[0] + ".sample";
-      } else if (output_files.size() == 2) {
-        init.outputWTCCCHapsFile = output_files[0];
-        init.outputWTCCCSampleFile = output_files[1];
-      } else
-        throw runtime_error("Could not interpret -o option");
-    } else {
-      assert(output_files.size() == 1);
-      init.outputBCFFile = output_files[0];
-    }
-
     //  omp_set_num_threads(numThreads);
 
     hapfuse hf(init);
-
-    if (hf.is_x())
-      hf.gender(genderFile.c_str());
 
     hf.work();
   } catch (std::exception &e) {

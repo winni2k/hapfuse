@@ -11,7 +11,7 @@
 
 #include "site.hpp"
 #include "utils.hpp"
-#include "hapfuse.hpp"
+#include "hfHelper.hpp"
 
 class HapSamp {
 
@@ -40,14 +40,4 @@ public:
   std::string GetChrom();
 };
 
-namespace HapfuseHelper {
-
-void load_files_from_file(const std::string &fileFile,
-                          std::vector<std::string> &inFiles);
-
-double prob2Phred(double prob);
-double phred2Prob(double phred);
-void wtccc_hap_order(std::vector<std::string> &wtccc_hap_files,
-                     std::vector<std::string> &wtccc_samp_files);
-}
 #endif /* _HAPSAMP_HPP */

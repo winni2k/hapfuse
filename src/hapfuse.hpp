@@ -38,8 +38,6 @@
 #include "utils.hpp"
 #include "writer.hpp"
 
-#define EPSILON 0.001 // precision of input floats
-
 class hapfuse {
 private:
   const HapfuseHelper::init m_init;

@@ -9,6 +9,14 @@
 #include <string>
 #include <vector>
 
+#include <htslib/hts.h>
+#include <htslib/vcf.h>
+
+#include "hapSamp.hpp"
+#include "utils.hpp"
+
+#define EPSILON 0.001 // precision of input floats
+
 namespace HapfuseHelper {
 enum class WeightingStyle { AVERAGE, LINEAR, STEP };
 enum class fileType { WTCCC, BCF };
@@ -63,7 +71,6 @@ std::string::size_type tokenize_partial(std::string &str,
                                         std::vector<std::string> &tokens);
 int tokenize_from(const std::string &str, std::string::size_type p_last,
                   std::vector<std::string> &tokens);
-
 }
 
 #endif /* _HFHELPER_HPP */

@@ -60,7 +60,14 @@ private:
   void loadGenderFile();
 
 public:
-  Writer(){};
+  Writer() = default;
+  Writer(const Writer &) = delete;
+  Writer &operator=(const Writer &) = delete;
+
+  // need to delet move related definitions because ostreams are not movable
+  Writer(Writer &&) = delete;
+  Writer &operator=(Writer &&) = delete;
+
   ~Writer() {
     if (m_hdr_out != nullptr)
       bcf_hdr_destroy(m_hdr_out);

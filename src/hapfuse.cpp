@@ -541,7 +541,6 @@ bool hapfuse::load_dir(const char *D) {
 void hapfuse::work() {
 
   vector<double> sum;
-  list<Site> outputSites;
   std::future<void> outputFut;
   list<std::future<vector<Site>>> chunkFutures;
   for (uint i = 0; i < m_numInputChunks; i++) {
@@ -579,7 +578,6 @@ void hapfuse::work() {
         clog << " done" << endl;
       }
       clog << "Seeking to beginning of overlap region..." << flush;
-      outputSites.clear();
 
       // find first site with the same position as first chunk position
       auto li = site.begin();
@@ -588,10 +586,11 @@ void hapfuse::work() {
           break;
       // splice all the site sites that are before chunk[0] in position
       // into outputSites for printing
+      list<Site> outputSites;
       outputSites.splice(outputSites.end(), site, site.begin(), li);
-      outputFut = std::async(launch::async, [this, &outputSites]() {
-        this->m_writer.write_sites(outputSites);
-      });
+      outputFut = std::async(launch::async, &hf::Writer::write_sites,
+                             &(this->m_writer), std::move(outputSites));
+
       clog << " done" << endl;
     }
 

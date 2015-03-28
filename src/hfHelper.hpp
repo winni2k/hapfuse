@@ -63,6 +63,7 @@ std::string::size_type tokenize_partial(std::string &str,
                                         std::vector<std::string> &tokens);
 int tokenize_from(const std::string &str, std::string::size_type p_last,
                   std::vector<std::string> &tokens);
+
 }
 
 #endif /* _HFHELPER_HPP */

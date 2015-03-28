@@ -78,7 +78,6 @@ private:
   void merge_chunk(std::vector<Site> chunk);
 
 public:
-  bool gender(const char *F);
   bool load_dir(const char *D);
   void work();
   std::vector<Site> load_chunk(size_t chunkIdx, bool first);

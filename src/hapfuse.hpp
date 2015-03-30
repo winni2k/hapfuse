@@ -53,12 +53,16 @@ private:
   std::vector<std::string> m_bcfFiles; // only used for bcfs
   std::vector<std::string> m_wtcccHapFiles;
   std::vector<std::string> m_wtcccSampFiles;
+  std::unordered_multimap<std::string, Site_base> m_alignMap;
 
+  void align_sites(std::vector<Site> & sites);
   std::vector<Site> load_chunk_WTCCC(const std::string &hapFile,
                                      const std::string &sampFile, bool first);
   std::vector<Site> load_chunk_bcf(const std::string &inFile, bool first);
   std::tuple<float, float> extractGP(float *gp, int gtA, int gtB);
 
+  void load_align_map();
+  
   // writer
   hf::Writer m_writer;
   hf::WriterHelper::init m_writerInit;

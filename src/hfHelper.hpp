@@ -27,14 +27,15 @@ struct init {
   std::vector<std::string> outputFiles;
   std::string mode = "b";
   WeightingStyle ws = WeightingStyle::STEP;
-  std::string wtcccHapFilesFile = "";
-  std::string wtcccSampFilesFile = "";
+  std::string wtcccHapFilesFile;
+  std::string wtcccSampFilesFile;
   std::vector<std::string> cmdLineInputFiles;
   std::unordered_map<std::string, bool> in_format_tags{
       {"GT", false}, {"GP", false}, {"APP", false}};
   std::unordered_map<std::string, bool> out_format_tags{
       {"GT", false}, {"GP", false}, {"APP", false}};
   bool unmatchedSitesOK = false;
+  std::string alignMapFile;
 };
 
 void load_files_from_file(const std::string &fileFile,

@@ -116,7 +116,56 @@ hapfuse::hapfuse(HapfuseHelper::init init)
   m_writerInit.APP = m_out_APP;
   m_writerInit.is_x = m_init.is_x;
   m_writerInit.genderFile = m_init.genderFile;
+
+  // read in alignMap if provided
+  if(!m_init.alignMapFile.empty())
+    load_align_map();
+    
 }
+
+void hapfuse::load_align_map(){
+
+  assert(!m_init.alignMapFile.empty());
+  ifile mapFD(m_init.alignMapFile);
+
+  if (!mapFD.isGood())
+    throw std::runtime_error("Could not open file [" + mapFD.name() + "]");
+
+  string line;
+
+  // discard header
+  vector<string> tokens;
+  while (getline(mapFD, line)) {
+    tokens.clear();
+    sutils::tokenize(line, tokens);
+    if(tokens.size() != 4)
+      throw runtime_error("While reading file ["+mapFD.name()
+			  + "]\nNumber of columns ["+to_string(tokens.size())
+			  + "] is not 4");
+    Site_base input;
+    vector<string> alls;
+    alls.push_back(std::move(tokens[2]));
+    alls.push_back(std::move(tokens[3]));
+    input.init(tokens[0], stoul(tokens[1]), std::move(alls));
+    m_alignMap.insert(std::make_pair<string, Site_base>(tokens[0]+":"+to_string(input.pos), std::move(input)));
+  }
+
+  mapFD.close();
+}
+
+// matches ref and alt alleles against alignMap and flips alleles if necessary
+void hapfuse::align_sites(vector<Site> & sites){
+
+  for(auto &s : sites){
+    auto range = m_alignMap.equal_range(s.chr + ":" + to_string(s.pos));
+    for(auto it = range.first; it != range.second; ++it)
+      if(it->second.all[0] == s.all[1] && it->second.all[1] == s.all[0])
+	s.flipStrand();
+  }
+    
+
+}
+
 
 // extract the GP fields, convert them to allelic probabilities and store in
 // pHap1,2
@@ -164,6 +213,7 @@ vector<Site> hapfuse::load_chunk(size_t chunkIdx, bool first) {
     throw std::logic_error("Unknown input chunk type");
 }
 
+
 vector<Site> hapfuse::load_chunk_WTCCC(const string &hapFile,
                                        const string &sampFile, bool first) {
 
@@ -193,6 +243,10 @@ vector<Site> hapfuse::load_chunk_WTCCC(const string &hapFile,
       break;
     sites.push_back(std::move(line));
   }
+
+  if(!m_alignMap.empty())
+    align_sites(sites);
+
   return sites;
 }
 
@@ -389,6 +443,9 @@ vector<Site> hapfuse::load_chunk_bcf(const string &inFile, bool first) {
         h = h * cSite.weight;
     }
   }
+
+  if(!m_alignMap.empty())
+    align_sites(chunk);
 
   return chunk;
 }

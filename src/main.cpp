@@ -41,6 +41,13 @@ int main(int argc, char **argv) {
          "    -T --in_format_tags <string> [GT,GP,APP]\n"
          "        Comma separated string of input format tags (no spaces).\n"
          "        Possible tags: GT, GP, APP\n\n"
+         "    -m --strand_alignment_map <file>\n"
+         "        Space separated file that contains canonical reference\n"
+         "        alignment for alleles.\n"
+         "        Sites in this file will be used to align input chunk sites.\n"
+         "        Example:\n"
+         "            20 50000 A T\n"
+         "            20 50555 G T\n\n"
          "For details, see README.md\n";
   if (argc < 3) {
     cerr << documentation.str();
@@ -64,9 +71,10 @@ int main(int argc, char **argv) {
         {"wtccc-sample-files", required_argument, nullptr, 's'},
         {"out_format_tags", required_argument, nullptr, 'T'},
         {"in_format_tags", required_argument, nullptr, 't'},
+	{"strand_alignment_map", required_argument, nullptr, 'm'},
         {0, 0, 0, 0}};
 
-    while ((opt = getopt_long(argc, argv, "d:g:o:O:w:h:s:t:T:", loptions,
+    while ((opt = getopt_long(argc, argv, "d:g:o:O:w:h:s:t:T:m:", loptions,
                               nullptr)) >= 0) {
       switch (opt) {
       case 'g':
@@ -104,6 +112,9 @@ int main(int argc, char **argv) {
         break;
       case 't':
         boost::split(in_format_tags, optarg, boost::is_any_of(","));
+        break;
+      case 'm':
+        init.alignMapFile = optarg;
         break;
       default:
         throw runtime_error("unexpected option: " + std::string(optarg));

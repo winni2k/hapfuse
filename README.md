@@ -39,6 +39,12 @@ This code explains how to build hapfuse v1.1
     # optionally, run regression tests
     cd hapfuse.1.1 && make check
 
+### Static linking
+
+I had to link boost and hts statically.  In order to do this, I ran this command instead of the final linking command:
+    /bin/sh ./libtool --tag=CXX   --mode=link g++  -O3 -std=gnu++11 -L/usr/local/lib -Wl,-R,/usr/local/lib /users/flint/winni/lib/libboost_iostreams.a /users/flint/winni/lib/libhts.a /usr/lib64/libz.a /usr/lib64/libbz2.a -o hapfuse hapfuse.o hapSamp.o main.o utils.o -lpthread
+libtool: link: g++ -O3 -std=gnu++11 -Wl,-R -Wl,/usr/local/lib -o hapfuse hapfuse.o hapSamp.o main.o utils.o  -L/usr/local/lib /users/flint/winni/lib/libboost_iostreams.a /users/flint/winni/lib/libhts.a /usr/lib64/libz.a /usr/lib64/libbz2.a -lpthread
+
 
 ## Usage
 

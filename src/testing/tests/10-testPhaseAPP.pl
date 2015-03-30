@@ -1,11 +1,10 @@
-#!/bin/perl
+#!/usr/bin/env perl
 use strict;
 use warnings;
 use Test::More tests => 12;
 use Test::Files;
 use File::Spec;
 use File::Path qw(make_path remove_tree);
-use File::Glob ':bsd_glob';
 use File::Slurp;
 use FindBin qw($Bin);
 use lib "$Bin/..";
@@ -23,7 +22,7 @@ my $resultsName = "madeUpData";
 my $results_vcf =
   File::Spec->catfile( $resDir, $tag . ".$resultsName.fused.vcf" );
 
-my @chunkVcfs = bsd_glob("../samples/$tag/$tag.madeUpData*.vcf");
+my @chunkVcfs = glob "../samples/$tag/$tag.madeUpData*.vcf";
 my $cmd = "./hapfuse -Ov -w average -tGT,APP -TGT,GP,APP -Ov -o $results_vcf "
   . join( ' ', @chunkVcfs );
 print "Call: $cmd\n";
@@ -132,7 +131,7 @@ my $flipMap = File::Spec->catfile( qw/.. samples/, $tag,
     $tag . ".madeUpData1.partial.map" );
 
 $cmd =
-    "./hapfuse -Ow -w step -o $base.3 -h $inputHaps_withFlip -s $inputSamps -m $flipMap";
+"./hapfuse -Ow -w step -o $base.3 -h $inputHaps_withFlip -s $inputSamps -m $flipMap";
 print "Call: $cmd\n";
 system $cmd;
 system "gunzip -f $base.3.hap.gz";
@@ -140,7 +139,6 @@ compare_ok( "$base.3.hap", $expected_wtccc_haps_file,
     "hapfuse phases from haplotypes to wtccc haps, chunks in reverse order" );
 compare_ok( "$base.3.sample", $expected_wtccc_sample_file,
     "hapfuse phases from haplotypes to wtccc haps, chunks in reverse order" );
-
 
 ####
 # and with both chunks having matching allele flip
@@ -150,7 +148,7 @@ $flipChunkHaps[1] =~ s/\.hap/.alleleFlip.hap/;
 write_file( $inputHaps_withFlip2, join( "\n", @flipChunkHaps ) );
 
 $cmd =
-    "./hapfuse -Ow -w step -o $base.4 -h $inputHaps_withFlip2 -s $inputSamps -m $flipMap";
+"./hapfuse -Ow -w step -o $base.4 -h $inputHaps_withFlip2 -s $inputSamps -m $flipMap";
 print "Call: $cmd\n";
 system $cmd;
 system "gunzip -f $base.4.hap.gz";

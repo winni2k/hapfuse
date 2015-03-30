@@ -1,11 +1,10 @@
-#!/bin/perl
+#!/usr/bin/env perl
 use strict;
 use warnings;
 use Test::More;
 use Test::Files;
 use File::Spec;
 use File::Path qw(make_path remove_tree);
-use File::Glob ':bsd_glob';
 use File::Slurp;
 
 my $sd = $ENV{srcdir};
@@ -42,9 +41,8 @@ my $inputHaps =
 my $inputSamps = $inputHaps;
 $inputSamps =~ s/Haps$/Samps/;
 
-my @chunkHaps = bsd_glob(
-"../samples/$testTag/$testTag.chr20_20*.STv1.2.13.C100.K100.first2Samp.bin.vcf.hap"
-);
+my @chunkHaps = glob
+"../samples/$testTag/$testTag.chr20_20*.STv1.2.13.C100.K100.first2Samp.bin.vcf.hap";
 my @chunkSamps = map { my $s = $_; $s =~ s/\.hap$/.sample/; $s } @chunkHaps;
 
 write_file( $inputHaps,  join( "\n", @chunkHaps ) );
@@ -114,9 +112,8 @@ compare_ok( $chunkSamps[0], $resultsSample_wtccc,
 
 ### now try and output to bcf, but only GT field
 # use test30 bcfs
-my @chunkVCFs = reverse bsd_glob(
-    "../samples/test30/test30.chr20_20*.STv1.2.13.C100.K100.first2Samp.bin.vcf"
-);
+my @chunkVCFs = reverse glob
+  "../samples/test30/test30.chr20_20*.STv1.2.13.C100.K100.first2Samp.bin.vcf";
 
 $tag = q/from_VCF_only_GT/;
 $results_vcf = File::Spec->catfile( $resultsDir, $resultsName . ".$tag.vcf" );

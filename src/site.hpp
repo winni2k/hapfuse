@@ -6,7 +6,7 @@
 
 #include <vector>
 #include <string>
-
+#include <cassert>
 
 class Site_base {
 public:
@@ -15,11 +15,10 @@ public:
   std::vector<std::string> all;
 
   void init(std::string chr, uint32_t pos, std::vector<std::string> alls) {
+    assert(alls.size() == 2);
     this->chr = std::move(chr);
     this->pos = pos;
     all = std::move(alls);
-    //    for (auto &a : alls)
-    //      all.push_back(std::move(a));
   }
 
   bool operator==(const Site_base &lhs) {
@@ -40,16 +39,17 @@ public:
     return false;
   }
 
+  void flipStrand() { std::swap(all[0], all[1]); }
 };
 
-class Site: public Site_base {
+class Site : public Site_base {
 public:
   std::vector<double> hap;
   double weight;
 
-  void flipStrand(){
-    std::swap(all[0],all[1]);
-    for(auto &h : hap)
+  void flipStrand() {
+    Site_base::flipStrand();
+    for (auto &h : hap)
       h = -(h - 0.5) + 0.5;
   }
 };

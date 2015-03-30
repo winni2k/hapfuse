@@ -149,8 +149,6 @@ void hapfuse::load_align_map(){
     input.init(tokens[0], stoul(tokens[1]), std::move(alls));
     m_alignMap.insert(std::make_pair<string, Site_base>(tokens[0]+":"+to_string(input.pos), std::move(input)));
   }
-
-  mapFD.close();
 }
 
 // matches ref and alt alleles against alignMap and flips alleles if necessary

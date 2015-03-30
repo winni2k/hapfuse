@@ -129,7 +129,7 @@ my @flipChunkHaps = @chunkHaps;
 $flipChunkHaps[0] =~ s/\.hap/.alleleFlip.hap/;
 write_file( $inputHaps_withFlip, join( "\n", @flipChunkHaps ) );
 my $flipMap = File::Spec->catfile( qw/.. samples/, $tag,
-    $tag . ".madeUpDate1.partial.map" );
+    $tag . ".madeUpData1.partial.map" );
 
 $cmd =
     "./hapfuse -Ow -w step -o $base.3 -h $inputHaps_withFlip -s $inputSamps -m $flipMap";

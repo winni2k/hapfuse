@@ -41,7 +41,7 @@ int main(int argc, char **argv) {
          "    -T --in_format_tags <string> [GT,GP,APP]\n"
          "        Comma separated string of input format tags (no spaces).\n"
          "        Possible tags: GT, GP, APP\n\n"
-         "    -m --strand_alignment_map <file>\n"
+         "    -m --strand_alignment_map <file> []\n"
          "        Space separated file that contains canonical reference\n"
          "        alignment for alleles.\n"
          "        Sites in this file will be used to align input chunk sites.\n"
@@ -71,7 +71,7 @@ int main(int argc, char **argv) {
         {"wtccc-sample-files", required_argument, nullptr, 's'},
         {"out_format_tags", required_argument, nullptr, 'T'},
         {"in_format_tags", required_argument, nullptr, 't'},
-	{"strand_alignment_map", required_argument, nullptr, 'm'},
+        {"strand_alignment_map", required_argument, nullptr, 'm'},
         {0, 0, 0, 0}};
 
     while ((opt = getopt_long(argc, argv, "d:g:o:O:w:h:s:t:T:m:", loptions,

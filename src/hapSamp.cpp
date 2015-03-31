@@ -6,9 +6,11 @@
 using namespace std;
 using namespace sutils;
 
-HapSamp::HapSamp(string hapFile, const string &sampFile, bool multiSpaceAllowed)
+HapSamp::HapSamp(string hapFile, const string &sampFile, bool multiSpaceAllowed,
+                 bool checkChrom, string chrom)
     : m_hapFile(std::move(hapFile)), m_hapFD(m_hapFile),
-      m_multiSpaceAllowed(multiSpaceAllowed) {
+      m_multiSpaceAllowed(multiSpaceAllowed), m_checkChrom(checkChrom),
+      m_chrom(std::move(chrom)) {
 
   if (!m_hapFD.isGood())
     throw std::runtime_error("Could not open file [" + m_hapFile + "]");
@@ -58,9 +60,15 @@ void HapSamp::FillFirstSite() {
   vector<string> alls;
   alls.push_back(std::move(tokens.at(3)));
   alls.push_back(std::move(tokens.at(4)));
+  if (m_checkChrom && !m_chrom.empty() && tokens.at(0) != m_chrom)
+    throw runtime_error("First line in file [" + m_hapFile +
+                        "] does not match chromosome [" + m_chrom + "]");
+
+  if(m_chrom.empty())
+      m_chrom = std::move(tokens.at(0));
+
   try {
-    m_firstSite.init(std::move(tokens.at(0)), stoul(tokens.at(2)),
-                     std::move(alls));
+    m_firstSite.init(m_chrom, stoul(tokens.at(2)), std::move(alls));
   } catch (std::invalid_argument &e) {
     throw std::runtime_error("At line " + to_string(m_linesRead) +
                              "\nCould not read position of line: " + m_buffer);
@@ -85,10 +93,12 @@ Site HapSamp::GetSite() {
     lastTokenStart = HapfuseHelper::tokenize_partial(line, 6, tokens);
   }
 
-  if (!m_firstSite.empty() && tokens[0] != m_firstSite.chr)
+  if (m_checkChrom && !m_chrom.empty() && tokens[0] != m_chrom)
     throw std::runtime_error("Encountered line with chromosome [" + tokens[0] +
-                             "], which differs from first line [" +
-                             m_firstSite.chr + "]");
+                             "], which differs from expected chromosome [" +
+                             m_chrom + "]");
+  if(!m_chrom.empty())
+      tokens[0] = m_chrom;
 
   Site outSite;
   outSite.hap.reserve(m_samps.size() * 2);
@@ -178,5 +188,5 @@ void HapSamp::CheckSamps(const vector<string> &samps) {
 
 string HapSamp::GetChrom() {
   FillFirstSite();
-  return m_firstSite.chr;
+  return m_chrom;
 }

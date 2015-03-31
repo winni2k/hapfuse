@@ -1,7 +1,7 @@
 #!/usr/bin/env perl
 use strict;
 use warnings;
-use Test::More tests => 12;
+use Test::More tests => 14;
 use Test::Files;
 use File::Spec;
 use File::Path qw(make_path remove_tree);
@@ -157,3 +157,20 @@ compare_ok( "$base.4.hap", $expected_wtccc_haps_file,
 compare_ok( "$base.4.sample", $expected_wtccc_sample_file,
     "hapfuse phases from haplotypes to wtccc haps, chunks in reverse order" );
 
+####
+# test -C option
+my $inputHaps_withWeirdChrom = File::Spec->catfile( $resDir,
+                                                    $tag . ".$resultsName.withWeirdChrom.WTCCC.inputHaps" );
+my @weirdChunkHaps = @chunkHaps;
+$weirdChunkHaps[0] =~ s/\.hap/.weirdChrom.hap/;
+write_file( $inputHaps_withWeirdChrom, join( "\n", @weirdChunkHaps ) );
+
+$cmd =
+"./hapfuse -C20 -Ow -w step -o $base.5 -h $inputHaps_withWeirdChrom -s $inputSamps -m $flipMap";
+print "Call: $cmd\n";
+system $cmd;
+system "gunzip -f $base.5.hap.gz";
+compare_ok( "$base.5.hap", $expected_wtccc_haps_file,
+    "hapfuse phases from haplotypes to wtccc haps, chunks in reverse order" );
+compare_ok( "$base.5.sample", $expected_wtccc_sample_file,
+    "hapfuse phases from haplotypes to wtccc haps, chunks in reverse order" );

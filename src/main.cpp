@@ -48,6 +48,10 @@ int main(int argc, char **argv) {
          "        Example:\n"
          "            20 50000 A T\n"
          "            20 50555 G T\n\n"
+         "    -C --assume_chrom <string> []\n"
+         "        Ignore the first column of WTCCC and BCF files and use -C\n"
+         "        as the chromosome. Do not check if all chunks are from the\n"
+         "        same chromosome. \n\n"
          "For details, see README.md\n";
   if (argc < 3) {
     cerr << documentation.str();
@@ -72,9 +76,10 @@ int main(int argc, char **argv) {
         {"out_format_tags", required_argument, nullptr, 'T'},
         {"in_format_tags", required_argument, nullptr, 't'},
         {"strand_alignment_map", required_argument, nullptr, 'm'},
+        {"assume_chrom", required_argument, nullptr, 'C'},
         {0, 0, 0, 0}};
 
-    while ((opt = getopt_long(argc, argv, "d:g:o:O:w:h:s:t:T:m:", loptions,
+    while ((opt = getopt_long(argc, argv, "d:g:o:O:w:h:s:t:T:m:C:", loptions,
                               nullptr)) >= 0) {
       switch (opt) {
       case 'g':
@@ -115,6 +120,9 @@ int main(int argc, char **argv) {
         break;
       case 'm':
         init.alignMapFile = optarg;
+        break;
+      case 'C':
+        init.assumeChrom = optarg;
         break;
       default:
         throw runtime_error("unexpected option: " + std::string(optarg));

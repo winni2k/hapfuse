@@ -36,6 +36,7 @@ struct init {
       {"GT", false}, {"GP", false}, {"APP", false}};
   bool unmatchedSitesOK = false;
   std::string alignMapFile;
+  std::string assumeChrom;
 };
 
 void load_files_from_file(const std::string &fileFile,

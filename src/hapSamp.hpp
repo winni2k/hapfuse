@@ -20,8 +20,11 @@ private:
   ifile m_hapFD;
   std::vector<std::string> m_samps;
 
-  std::string m_chrom;
   const bool m_multiSpaceAllowed = false;
+
+  // chromosome
+  std::string m_chrom;
+  bool m_checkChrom = true;
 
   Site m_firstSite;
   unsigned m_linesRead = 0;
@@ -31,7 +34,8 @@ private:
 
 public:
   HapSamp(std::string hapFile, const std::string &sampFile,
-          bool multiSpaceAllowed = false);
+          bool multiSpaceAllowed = false, bool checkChrom = true,
+          std::string chrom = "");
 
   unsigned GetFirstPos();
   Site GetSite();

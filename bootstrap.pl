@@ -13,6 +13,12 @@ use FindBin qw/$Bin/;
 print STDERR "autoreconf --install --symlink...\n";
 system('autoreconf --install --symlink');
 
+# compile gtest
+my $gtestDir = "gtest-1.7.0";
+my $cmd = "cd $gtestDir/make && make";
+print STDERR $cmd ."\n";
+system($cmd);
+
 # find package version
 my @configFile = read_file("$Bin/configure.ac");
 my @lines = grep { m/^\s*AC_INIT/ } @configFile;

@@ -6,12 +6,13 @@ AM_INIT_AUTOMAKE([-Wall -Werror foreign])
 
 AC_CONFIG_MACRO_DIR([m4])
 
+AM_PROG_AR
+
 echo "Testing for a c++ complier"
 AC_PROG_CXX
 
 echo "Setting language to C++"
 AC_LANG(C++)
-AC_PROG_CXX
 
 # Check for C++11
 echo "Check for C++11 support in compiler"

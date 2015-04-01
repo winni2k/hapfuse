@@ -1,7 +1,7 @@
 #!/usr/bin/env perl
 use strict;
 use warnings;
-use Test::More tests => 14;
+use Test::More tests => 16;
 use Test::Files;
 use File::Spec;
 use File::Path qw(make_path remove_tree);
@@ -160,7 +160,7 @@ compare_ok( "$base.4.sample", $expected_wtccc_sample_file,
 ####
 # test -C option
 my $inputHaps_withWeirdChrom = File::Spec->catfile( $resDir,
-                                                    $tag . ".$resultsName.withWeirdChrom.WTCCC.inputHaps" );
+    $tag . ".$resultsName.withWeirdChrom.WTCCC.inputHaps" );
 my @weirdChunkHaps = @chunkHaps;
 $weirdChunkHaps[0] =~ s/\.hap/.weirdChrom.hap/;
 write_file( $inputHaps_withWeirdChrom, join( "\n", @weirdChunkHaps ) );
@@ -174,3 +174,25 @@ compare_ok( "$base.5.hap", $expected_wtccc_haps_file,
     "hapfuse phases from haplotypes to wtccc haps, chunks in reverse order" );
 compare_ok( "$base.5.sample", $expected_wtccc_sample_file,
     "hapfuse phases from haplotypes to wtccc haps, chunks in reverse order" );
+
+####
+# test IDs are preserved
+my $inputHaps_withID =
+  File::Spec->catfile( $resDir, $tag . ".$resultsName.withID.WTCCC.inputHaps" );
+my $expected = $expected_wtccc_haps_file;
+$expected =~ s/madeUpData\.fused/madeUpData.withID.fused/;
+
+my @withIDChunkHaps = @chunkHaps;
+$withIDChunkHaps[0] =~ s/\.hap/.withID.hap/;
+$withIDChunkHaps[1] =~ s/\.hap/.withID.hap/;
+write_file( $inputHaps_withID, join( "\n", @withIDChunkHaps ) );
+
+$cmd =
+  "./hapfuse -C20 -Ow -w step -o $base.6 -h $inputHaps_withID -s $inputSamps";
+print "Call: $cmd\n";
+system $cmd;
+system "gunzip -f $base.6.hap.gz";
+compare_ok( "$base.6.hap", $expected,
+    "hapfuse phases from haplotypes to wtccc haps, with rsid" );
+compare_ok( "$base.6.sample", $expected_wtccc_sample_file,
+    "hapfuse phases from haplotypes to wtccc haps" );

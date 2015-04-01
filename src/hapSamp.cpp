@@ -64,8 +64,8 @@ void HapSamp::FillFirstSite() {
     throw runtime_error("First line in file [" + m_hapFile +
                         "] does not match chromosome [" + m_chrom + "]");
 
-  if(m_chrom.empty())
-      m_chrom = std::move(tokens.at(0));
+  if (m_chrom.empty())
+    m_chrom = std::move(tokens.at(0));
 
   try {
     m_firstSite.init(m_chrom, stoul(tokens.at(2)), std::move(alls));
@@ -97,8 +97,8 @@ Site HapSamp::GetSite() {
     throw std::runtime_error("Encountered line with chromosome [" + tokens[0] +
                              "], which differs from expected chromosome [" +
                              m_chrom + "]");
-  if(!m_chrom.empty())
-      tokens[0] = m_chrom;
+  if (!m_chrom.empty())
+    tokens[0] = m_chrom;
 
   Site outSite;
   outSite.hap.reserve(m_samps.size() * 2);
@@ -106,7 +106,8 @@ Site HapSamp::GetSite() {
   alls.push_back(std::move(tokens[3]));
   alls.push_back(std::move(tokens[4]));
   try {
-    outSite.init(std::move(tokens[0]), stoul(tokens[2]), std::move(alls));
+    outSite.init(std::move(tokens[0]), stoul(tokens[2]), std::move(alls),
+                 std::move(tokens[1]));
   } catch (std::invalid_argument &e) {
     throw std::runtime_error("At line " + to_string(m_linesRead) +
                              "\nCould not read position: " + tokens[2]);

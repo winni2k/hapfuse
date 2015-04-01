@@ -219,7 +219,7 @@ vector<Site> hapfuse::load_chunk_WTCCC(const string &hapFile,
   HapSamp chunk(std::move(hapFile), sampFile, false, m_init.assumeChrom.empty(),
                 m_init.assumeChrom);
 
-  // Open output VCF for writing
+  // Open output file for writing
   if (first) {
     assert(m_names.empty());
     m_names = chunk.GetSamps();
@@ -314,6 +314,7 @@ vector<Site> hapfuse::load_chunk_bcf(const string &inFile, bool first) {
     //    boost::split(tokens, buffer, boost::is_any_of("\t"));
     site.chr = bcf_hdr_id2name(hdr.get(), rec->rid);
     site.pos = (rec->pos + 1);
+    site.id = rec->d.id;
 
     // make sure site is biallelic
     assert(rec->n_allele == 2);
@@ -600,7 +601,8 @@ void hapfuse::find_overlap(vector<Site> chunk, list<Site>::iterator &first,
         throw std::runtime_error("Encountered site in overlap region that "
                                  "does not exist in both chunks: " +
                                  chunk[m].chr + ":" + to_string(chunk[m].pos) +
-                                 " " + chunk[m].all[0] + " " + chunk[m].all[1]);
+                                 " " + chunk[m].id + " " + chunk[m].all[0] +
+                                 " " + chunk[m].all[1]);
       if (!firstFound) {
         first = li;
         --first;

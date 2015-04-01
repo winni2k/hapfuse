@@ -64,8 +64,8 @@ void Writer::init(WriterHelper::init init) {
 
   write_head();
 
-  if(m_init.is_x)
-      loadGenderFile();
+  if (m_init.is_x)
+    loadGenderFile();
 }
 
 void Writer::loadGenderFile() {
@@ -233,8 +233,8 @@ void Writer::write_wtccc_site(const Site &osite, const vector<unsigned> &gts) {
     throw runtime_error("Output file is not good");
 
   // write out the first five columns
-  m_fusedWTCCCHaps << osite.chr << " . " << osite.pos << " " << osite.all[0]
-                   << " " << osite.all[1];
+  m_fusedWTCCCHaps << osite.chr << " " << osite.id << " " << osite.pos << " "
+                   << osite.all[0] << " " << osite.all[1];
 
   // print out every allele
   // 3 and 5 are 0 or 1, respectively, increased by one and right-shifted by

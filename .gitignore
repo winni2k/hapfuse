@@ -19,3 +19,5 @@ hapfuse*
 /m4/ltversion.m4
 /m4/lt~obsolete.m4
 /missing
+/gtest-1.7.0/make/gtest_main.a
+/gtest-1.7.0/make/sample1_unittest

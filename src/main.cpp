@@ -5,18 +5,22 @@
 
 using namespace std;
 
+void printParameters(const HapfuseHelper::init &init);
+
 int main(int argc, char **argv) {
+
+  ostringstream header;
+  header << "hapfuse v" << PACKAGE_VERSION << "\n";
 
   ostringstream documentation;
   documentation
-      << "\n"
-         "Program: hapfuse\n"
-         "Version: " << PACKAGE_VERSION
-      << "\n\n"
-         "Author:  Warren W Kretzschmar @ Marchini Group @ Univ. of Oxford.\n"
+      << "\nAuthor:  Warren W Kretzschmar @ Marchini Group @ Univ. of Oxford.\n"
          "         Based on code by Yi Wang @ Fuli Yu Group @ BCM-HGSC.\n\n"
          "Usage: hapfuse [options] <-o output_file> <VCF/BCF files to "
          "process>\n\n"
+         "    -v --verbosity <integer> [0]\n"
+         "        Integer between -1 and 1. The larger the integer, the more\n"
+         "        verbose the output\n\n"
          "    -o, --output <file> [] - required argument\n"
          "        Name of output file if output is VCF/BCF\n"
          "        Prefix or comma separated haps,sample files if -Ow\n\n"
@@ -54,6 +58,7 @@ int main(int argc, char **argv) {
          "        same chromosome. \n\n"
          "For details, see README.md\n";
   if (argc < 3) {
+    cerr << header.str();
     cerr << documentation.str();
     exit(1);
   }
@@ -77,14 +82,16 @@ int main(int argc, char **argv) {
         {"in_format_tags", required_argument, nullptr, 't'},
         {"strand_alignment_map", required_argument, nullptr, 'm'},
         {"assume_chrom", required_argument, nullptr, 'C'},
+        {"verbosity", required_argument, nullptr, 'v'},
         {0, 0, 0, 0}};
 
-    while ((opt = getopt_long(argc, argv, "d:g:o:O:w:h:s:t:T:m:C:", loptions,
+    while ((opt = getopt_long(argc, argv, "d:g:o:O:w:h:s:t:T:m:C:v:", loptions,
                               nullptr)) >= 0) {
       switch (opt) {
       case 'g':
         init.is_x = true;
         init.genderFile = optarg;
+        throw runtime_error("Gender file is not implemented yet.");
         break;
 
       case 'o':
@@ -123,6 +130,9 @@ int main(int argc, char **argv) {
         break;
       case 'C':
         init.assumeChrom = optarg;
+        break;
+      case 'v':
+        init.verbosity = stoi(optarg);
         break;
       default:
         throw runtime_error("unexpected option: " + std::string(optarg));
@@ -167,18 +177,10 @@ int main(int argc, char **argv) {
       }
     }
 
-    clog << "Input tags:";
-    for (auto it : init.in_format_tags)
-      if (it.second)
-        clog << " " << it.first;
-    clog << endl;
-    clog << "Output tags:";
-    for (auto it : init.out_format_tags)
-      if (it.second)
-        clog << " " << it.first;
-    clog << endl;
-
-    //  omp_set_num_threads(numThreads);
+    if (init.verbosity > -1) {
+      clog << header.str();
+      printParameters(init);
+    }
 
     hapfuse hf(init);
 
@@ -188,4 +190,43 @@ int main(int argc, char **argv) {
     exit(1);
   }
   return 0;
+}
+
+void printParameters(const HapfuseHelper::init &init) {
+
+  // print input parameters to stderr
+  clog << "Parameters:" << endl;
+  clog << "* Fusing method: ";
+  switch (init.ws) {
+  case HapfuseHelper::WeightingStyle::STEP:
+    clog << "step";
+    break;
+  case HapfuseHelper::WeightingStyle::AVERAGE:
+    clog << "average";
+    break;
+  case HapfuseHelper::WeightingStyle::LINEAR:
+    clog << "linear";
+    break;
+  default:
+    throw logic_error("Encountered unexpected weighting style");
+  }
+  clog << endl;
+
+  clog << "* Input tags:";
+  for (auto it : init.in_format_tags)
+    if (it.second)
+      clog << " " << it.first;
+  clog << endl;
+  clog << "* Output tags:";
+  for (auto it : init.out_format_tags)
+    if (it.second)
+      clog << " " << it.first;
+  clog << endl;
+
+  if (!init.alignMapFile.empty())
+    clog << "* Alignment map [" + init.alignMapFile + "]" << endl;
+
+  if (!init.assumeChrom.empty())
+    clog << "* Assuming chromosome [" + init.assumeChrom + "]\n"
+         << "* Ignoring input chunk chromosomes" << endl;
 }

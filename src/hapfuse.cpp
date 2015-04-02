@@ -73,6 +73,20 @@ hapfuse::hapfuse(HapfuseHelper::init init)
 
     // order input hap files by first position
     HapfuseHelper::wtccc_hap_order(m_wtcccHapFiles, m_wtcccSampFiles);
+
+    // print what is being read as input
+    if (m_init.verbosity > -1) {
+      clog << "* Input WTCCC hap files file: [" + m_init.wtcccHapFilesFile +
+                  "]\n"
+           << "* Input WTCCC sample files file: [" + m_init.wtcccSampFilesFile +
+                  "]" << endl;
+      clog << "* Input WTCCC hap/samp files: [" << endl;
+      for (size_t i = 0; i < m_wtcccHapFiles.size(); ++i)
+        clog << "\t" << m_wtcccHapFiles[i] << " " << m_wtcccSampFiles.at(i)
+             << endl;
+      clog << "]" << endl;
+    }
+
   }
 
   // else load BCFs from command line
@@ -85,6 +99,14 @@ hapfuse::hapfuse(HapfuseHelper::init init)
 
     // order input BCFs by first position
     HapfuseHelper::bcf_order(m_bcfFiles);
+
+    // print what is being read
+    if (m_init.verbosity > -1) {
+      clog << "* Input VCF/BCF files: [\n";
+      for (auto f : m_bcfFiles)
+        clog << "\t" + f + "\n";
+      clog << "]" << endl;
+    }
   }
 
   // if multiple input files are given then error out
@@ -116,6 +138,7 @@ hapfuse::hapfuse(HapfuseHelper::init init)
   m_writerInit.APP = m_out_APP;
   m_writerInit.is_x = m_init.is_x;
   m_writerInit.genderFile = m_init.genderFile;
+  m_writerInit.verbosity = m_init.verbosity;
 
   // read in alignMap if provided
   if (!m_init.alignMapFile.empty())
@@ -498,9 +521,11 @@ void hapfuse::work() {
           std::async(launch::async, &hapfuse::load_chunk, this, i + 1, false));
 
     assert(!chunkFutures.empty());
-    clog << "Waiting on chunk to load..." << flush;
+    if (m_init.verbosity > 0)
+      clog << "Waiting on chunk to load..." << flush;
     vector<Site> chunk = std::move(chunkFutures.front().get());
-    clog << " done" << endl;
+    if (m_init.verbosity > 0)
+      clog << " done" << endl;
 
     chunkFutures.pop_front();
 
@@ -508,11 +533,14 @@ void hapfuse::work() {
     // but are not in the chunk we just loaded
     if (!site.empty()) {
       if (i > 1) {
-        clog << "Waiting for merged sites to be written.." << flush;
+        if (m_init.verbosity > 0)
+          clog << "Waiting for merged sites to be written.." << flush;
         outputFut.get();
-        clog << " done" << endl;
+        if (m_init.verbosity > 0)
+          clog << " done" << endl;
       }
-      clog << "Seeking to beginning of overlap region..." << flush;
+      if (m_init.verbosity > 0)
+        clog << "Seeking to beginning of overlap region..." << flush;
 
       // find first site with the same position as first chunk position
       auto li = site.begin();
@@ -526,11 +554,13 @@ void hapfuse::work() {
       outputFut = std::async(launch::async, &hf::Writer::write_sites,
                              &(this->m_writer), std::move(outputSites));
 
-      clog << " done" << endl;
+      if (m_init.verbosity > 0)
+        clog << " done" << endl;
     }
 
     // find the correct phase
-    clog << "Matching up haplotypes between chunks..." << flush;
+    if (m_init.verbosity > 0)
+      clog << "Matching up haplotypes between chunks..." << flush;
     sum.assign(numSamps() * 2, 0);
 
     for (list<Site>::iterator li = site.begin(); li != site.end(); ++li)
@@ -552,24 +582,31 @@ void hapfuse::work() {
           chunk[m].hap[j * 2 + 1] = t;
         }
       }
-    clog << " done" << endl;
+    if (m_init.verbosity > 0)
+      clog << " done" << endl;
 
     // add chunk to buffer
-    if (chunk.empty())
-      clog << "Skipping chunk " << i + 1 << " of " << m_numInputChunks
-           << " because it is empty" << endl;
-    else
-      clog << "Merging chunk " << i + 1 << " of " << m_numInputChunks
-           << "\n\tChunk region: " << chunk.front().chr << ":"
-           << chunk.front().pos << "-" << chunk.back().pos << " ... " << flush;
+    if (m_init.verbosity > 0) {
+      if (chunk.empty())
+        clog << "Skipping chunk " << i + 1 << " of " << m_numInputChunks
+             << " because it is empty" << endl;
+      else
+        clog << "Merging chunk " << i + 1 << " of " << m_numInputChunks
+             << "\n\tChunk region: " << chunk.front().chr << ":"
+             << chunk.front().pos << "-" << chunk.back().pos << " ... "
+             << flush;
+    }
     merge_chunk(std::move(chunk));
-    clog << "done" << endl;
+    if (m_init.verbosity > 0)
+      clog << "done" << endl;
   }
 
   if (m_numInputChunks > 1) {
-    clog << "Waiting for merged sites to be written.." << flush;
+    if (m_init.verbosity > 0)
+      clog << "Waiting for merged sites to be written.." << flush;
     outputFut.get();
-    clog << " done" << endl;
+    if (m_init.verbosity > 0)
+      clog << " done" << endl;
   }
   for (auto li : site)
     m_writer.write_site(li);

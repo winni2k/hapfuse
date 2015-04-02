@@ -34,11 +34,13 @@ void Writer::init(WriterHelper::init init) {
                                      m_init.outputFiles.end(), string(",")) +
                           "]");
 
-    clog << "[Writer] Writing output to:\n\tWTCCC haps [" << haps << "]"
-         << endl;
+    if (m_init.verbosity > -1)
+      clog << "* [Writer] Writing output to:\n\tWTCCC haps [" << haps << "]"
+           << endl;
     m_fusedWTCCCHaps.open(haps);
 
-    clog << "\tWTCCC sample [" << sample << "]" << endl;
+    if (m_init.verbosity > -1)
+      clog << "\tWTCCC sample [" << sample << "]" << endl;
     m_fusedWTCCCSample.open(sample);
   }
   // BCF output file
@@ -52,8 +54,9 @@ void Writer::init(WriterHelper::init init) {
 
     assert(!m_fusedVCF);
 
-    clog << "Writing output to:\n\tVCF/BCF [" << m_init.outputFiles[0] << "]"
-         << endl;
+    if (m_init.verbosity > -1)
+      clog << "* [Writer] Writing output to:\n\tVCF/BCF ["
+           << m_init.outputFiles[0] << "]" << endl;
 
     string cmode = "w" + m_init.mode;
     m_fusedVCF = hts_open(m_init.outputFiles[0].c_str(), cmode.c_str());

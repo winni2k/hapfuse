@@ -22,6 +22,7 @@ enum class WeightingStyle { AVERAGE, LINEAR, STEP };
 enum class fileType { WTCCC, BCF };
 
 struct init {
+  int verbosity = 0;
   std::string genderFile;
   bool is_x = false;
   std::vector<std::string> outputFiles;

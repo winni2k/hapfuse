@@ -31,6 +31,7 @@ struct init {
   std::vector<std::string> sampNames;
   bool is_x = false;
   std::string genderFile;
+  int verbosity = 0;
 };
 }
 

@@ -13,6 +13,6 @@ distclean-local:
 bin_PROGRAMS = hapfuse
 hapfuse_SOURCES = src/hapfuse.cpp src/hapfuse.hpp src/hapSamp.cpp src/hapSamp.hpp src/main.cpp src/site.hpp src/utils.cpp src/writer.cpp src/writer.hpp src/hfHelper.hpp src/hfHelper.cpp
 
-AM_CPPFLAGS = $(BOOST_CPPFLAGS)
+AM_CPPFLAGS = $(BOOST_CPPFLAGS) $(ZLIB_CFLAGS) $(HTSLIB_CFLAGS)
 AM_LDFLAGS = $(BOOST_IOSTREAMS_LDFLAGS)
-LIBS += $(BOOST_IOSTREAMS_LIBS)
+LIBS += $(BOOST_IOSTREAMS_LIBS) $(ZLIB_LIBS) $(HTSLIB_LIBS)

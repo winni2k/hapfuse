@@ -1,5 +1,5 @@
 AC_INIT([hapfuse], [1.3], [wkretzsch@gmail.com])
-AM_INIT_AUTOMAKE([-Wall -Werror foreign])
+AM_INIT_AUTOMAKE([-Wall -Werror foreign subdir-objects])
 
 # Use -O3 as default optimization level
 : ${CXXFLAGS="-O3"}

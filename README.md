@@ -108,3 +108,8 @@ The 'linear' method is experimental.  It is the same as average, but
 it gives more weight to diplotypes that are closer to a chunk's
 center. 
 
+## Thanks
+
+I thank the following people for contributing code to this project:
+
+- Joshua Randall for help with the autoconf files

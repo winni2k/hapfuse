@@ -20,9 +20,10 @@ libhapfuse_a_SOURCES=$(hfheaders) $(hfcpp)
 bin_PROGRAMS = hapfuse
 hapfuse_SOURCES = $(hfheaders) $(hfcpp) src/main.cpp
 
-AM_CPPFLAGS = $(BOOST_CPPFLAGS)
+AM_CPPFLAGS = $(BOOST_CPPFLAGS) $(ZLIB_CFLAGS) $(HTSLIB_CFLAGS)
 AM_LDFLAGS = $(BOOST_IOSTREAMS_LDFLAGS)
-LIBS += $(BOOST_IOSTREAMS_LIBS)
+
+LIBS += $(BOOST_IOSTREAMS_LIBS) $(ZLIB_LIBS) $(HTSLIB_LIBS)
 
 
 # gtest

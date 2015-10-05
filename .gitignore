@@ -1,6 +1,14 @@
 *.gch
 *.o
 bin
+
+# don't track testing results
+/src/testing/results/
+
+# don't track build dirs
+/hapfuse.*
+
+# mostly autoconf files
 *#
 /Makefile.in
 /aclocal.m4
@@ -10,7 +18,8 @@ bin
 /config.sub
 /configure
 /depcomp
-hapfuse*
+/compile
+/test-driver
 /install-sh
 /ltmain.sh
 /m4/libtool.m4
@@ -21,3 +30,4 @@ hapfuse*
 /missing
 /gtest-1.7.0/make/gtest_main.a
 /gtest-1.7.0/make/sample1_unittest
+

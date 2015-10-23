@@ -1,4 +1,4 @@
-AC_INIT([hapfuse], [1.6.1], [wkretzsch@gmail.com])
+AC_INIT([hapfuse], [1.6.2], [wkretzsch@gmail.com])
 AM_INIT_AUTOMAKE([-Wall -Werror foreign subdir-objects])
 
 # Use -O3 as default optimization level

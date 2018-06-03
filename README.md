@@ -24,8 +24,9 @@ support for it.  Patches welcome.
 
 ## Authorship
 
-This code was written and is maintained by Warren Kretzschmar. Please
-email <warrenk@kth.se> with bug reports.
+This code was written and is maintained by Warren Kretzschmar
+<warrenk@kth.se>. For bug reports, please raise an issue on the
+[bitbucket page](https://bitbucket.org/wkretzsch/hapfuse/issues).
 
 ## Prerequisites
 
